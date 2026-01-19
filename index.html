@@ -26,8 +26,8 @@
     <!-- FIREBASE SDK -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyBRAeIilgqixdDrBQFThpx00D2Te0gPuY0",
@@ -47,7 +47,7 @@
 
         window.API = { 
             auth, db, provider, signInWithPopup, signOut, 
-            onAuthStateChanged, signInAnonymously, doc, setDoc, onSnapshot 
+            onAuthStateChanged, signInAnonymously, doc, setDoc, onSnapshot, getDoc, signInWithCustomToken
         };
     </script>
 
@@ -72,54 +72,68 @@
             Check: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
         };
 
+        const INITIAL_STATE = { 
+            currentPhaseId: 0, 
+            completedTasks: [], 
+            streak: 0, 
+            startDate: new Date().toISOString(), 
+            lastActivity: new Date().toDateString(), 
+            history: {}, 
+            notificationsEnabled: false, 
+            autoAdvance: true 
+        };
+
         function App() {
             const [user, setUser] = useState(null);
             const [view, setView] = useState('home');
-            const [isLoaded, setIsLoaded] = useState(false);
+            const [state, setState] = useState(INITIAL_STATE);
             const [copyOk, setCopyOk] = useState(false);
-            
-            const [state, setState] = useState({ 
-                currentPhaseId: 0, completedTasks: [], streak: 0, 
-                startDate: new Date().toISOString(), lastActivity: new Date().toDateString(), 
-                history: {}, notificationsEnabled: false, autoAdvance: true
-            });
+            const isLoaded = useRef(false);
 
-            // Инициализация Auth
+            // 1. Auth Init
             useEffect(() => {
-                const init = setInterval(() => {
-                    if (window.API) {
-                        clearInterval(init);
-                        window.API.onAuthStateChanged(window.API.auth, async (u) => {
-                            if (!u) {
-                                await window.API.signInAnonymously(window.API.auth);
-                            }
-                            setUser(u);
-                        });
-                    }
-                }, 100);
-                return () => clearInterval(init);
+                const initAuth = async () => {
+                    const timer = setInterval(() => {
+                        if (window.API) {
+                            clearInterval(timer);
+                            window.API.onAuthStateChanged(window.API.auth, async (u) => {
+                                if (!u) {
+                                    await window.API.signInAnonymously(window.API.auth);
+                                }
+                                setUser(u);
+                            });
+                        }
+                    }, 50);
+                };
+                initAuth();
             }, []);
 
-            // Загрузка данных из Firestore
+            // 2. Data Listener (Only once user is ready)
             useEffect(() => {
                 if (!user || !window.API) return;
-                // ВАЖНО: Используем строгий путь из правил
-                const path = window.API.doc(window.API.db, "artifacts", "deutschmeister-489ea", "users", user.uid, "state", "progress");
-                const unsub = window.API.onSnapshot(path, (snap) => {
+                const appId = typeof __app_id !== 'undefined' ? __app_id : 'deutsch-pro-v13';
+                const docRef = window.API.doc(window.API.db, 'artifacts', appId, 'users', user.uid, 'state', 'data');
+                
+                const unsub = window.API.onSnapshot(docRef, (snap) => {
                     if (snap.exists()) {
-                        setState(prev => ({ ...prev, ...snap.data() }));
+                        setState(snap.data());
+                    } else {
+                        // If new user, save initial state
+                        window.API.setDoc(docRef, INITIAL_STATE);
                     }
-                    setIsLoaded(true); // Данные загружены, можно разрешать сохранение
-                });
+                    isLoaded.current = true;
+                }, (err) => console.error("Firestore Error:", err));
+
                 return () => unsub();
             }, [user]);
 
-            // Сохранение данных
-            const save = useCallback(async (ns) => {
-                if (!user || !isLoaded || !window.API) return;
-                const path = window.API.doc(window.API.db, "artifacts", "deutschmeister-489ea", "users", user.uid, "state", "progress");
-                await window.API.setDoc(path, ns);
-            }, [user, isLoaded]);
+            // 3. Save Logic (Helper)
+            const saveState = useCallback(async (newState) => {
+                if (!user || !isLoaded.current || !window.API) return;
+                const appId = typeof __app_id !== 'undefined' ? __app_id : 'deutsch-pro-v13';
+                const docRef = window.API.doc(window.API.db, 'artifacts', appId, 'users', user.uid, 'state', 'data');
+                await window.API.setDoc(docRef, newState);
+            }, [user]);
 
             const daysPassed = useMemo(() => {
                 const diff = new Date() - new Date(state.startDate);
@@ -130,25 +144,23 @@
             const currentPhase = PHASES[state.currentPhaseId];
             const tasks = isDayA ? currentPhase.tasksA : currentPhase.tasksB;
 
-            // Логика автоматического перехода
-            useEffect(() => {
-                if (!isLoaded || !state.autoAdvance) return;
+            // Auto-advance logic
+            const calculatedPhaseId = useMemo(() => {
                 let cumulativeDays = 0;
-                let targetId = 0;
                 for (let i = 0; i < PHASES.length; i++) {
                     cumulativeDays += PHASES[i].days;
-                    if (daysPassed < cumulativeDays) {
-                        targetId = i;
-                        break;
-                    }
-                    if (i === PHASES.length - 1) targetId = i;
+                    if (daysPassed < cumulativeDays) return i;
                 }
-                if (targetId !== state.currentPhaseId) {
-                    const newState = { ...state, currentPhaseId: targetId, completedTasks: [] };
-                    setState(newState);
-                    save(newState);
+                return PHASES.length - 1;
+            }, [daysPassed]);
+
+            useEffect(() => {
+                if (state.autoAdvance && isLoaded.current && state.currentPhaseId !== calculatedPhaseId) {
+                    const ns = { ...state, currentPhaseId: calculatedPhaseId, completedTasks: [] };
+                    setState(ns);
+                    saveState(ns);
                 }
-            }, [daysPassed, isLoaded, state.autoAdvance, state.currentPhaseId]);
+            }, [calculatedPhaseId, state.autoAdvance, state.currentPhaseId, saveState]);
 
             const toggleTask = (id) => {
                 const isDone = state.completedTasks.includes(id);
@@ -164,14 +176,14 @@
 
                 const newState = { ...state, completedTasks: nt, lastActivity: todayHuman, streak: ns, history: newHistory };
                 setState(newState);
-                save(newState);
+                saveState(newState);
             };
 
-            const changePhaseManual = async (pid) => {
-                if (window.confirm("Сменить этап вручную? Это временно отключит автоматический переход.")) {
-                    const newState = { ...state, currentPhaseId: pid, completedTasks: [], autoAdvance: false };
-                    setState(newState);
-                    await save(newState);
+            const handleManualPhase = async (pid) => {
+                if (window.confirm("Сменить этап вручную? Авто-переход будет отключен.")) {
+                    const ns = { ...state, currentPhaseId: pid, completedTasks: [], autoAdvance: false };
+                    setState(ns);
+                    await saveState(ns);
                     setView('home');
                 }
             };
@@ -180,13 +192,13 @@
                 if (state.notificationsEnabled) {
                     const ns = {...state, notificationsEnabled: false};
                     setState(ns);
-                    save(ns);
+                    saveState(ns);
                 } else {
                     const res = await Notification.requestPermission();
                     if (res === 'granted') {
                         const ns = {...state, notificationsEnabled: true};
                         setState(ns);
-                        save(ns);
+                        saveState(ns);
                         new Notification("Meister", { body: "Уведомления включены!" });
                     } else {
                         alert("Разрешите уведомления в настройках браузера.");
@@ -200,10 +212,6 @@
                 setCopyOk(true);
                 setTimeout(() => setCopyOk(false), 2000);
             };
-
-            const totalTasksDone = useMemo(() => {
-                return Object.values(state.history).reduce((a, b) => a + b, 0);
-            }, [state.history]);
 
             return (
                 <div className="max-w-md mx-auto min-h-screen bg-[#F8FAFC] flex flex-col pb-28 shadow-xl">
@@ -241,7 +249,7 @@
                                 <div className="flex justify-between items-end">
                                     <div>
                                         <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest leading-none mb-1">{isDayA ? 'Цикл A: Ввод' : 'Цикл B: Вывод'}</p>
-                                        <h2 className="text-2xl font-black text-slate-900 leading-tight">План на сегодня</h2>
+                                        <h2 className="text-2xl font-black text-slate-900 leading-tight text-slate-800">План на сегодня</h2>
                                     </div>
                                     <div className="flex flex-col items-end gap-1">
                                         <span className="text-[10px] font-black text-white bg-indigo-600 px-3 py-1 rounded-full uppercase">{currentPhase.level}</span>
@@ -251,7 +259,7 @@
 
                                 <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white shadow-2xl relative overflow-hidden group">
                                     <div className="relative z-10 space-y-4">
-                                        <h3 className="text-2xl font-black mb-6 italic">40 Минут <span className="text-indigo-400 uppercase tracking-tighter">fokus</span></h3>
+                                        <h3 className="text-2xl font-black mb-6 italic tracking-tight">40 Минут <span className="text-indigo-400 uppercase tracking-tighter">fokus</span></h3>
                                         {tasks.map(t => (
                                             <div key={t.id} onClick={() => toggleTask(t.id)} className="flex items-center gap-4 bg-white/5 p-4 rounded-[1.8rem] border border-white/5 cursor-pointer hover:bg-white/10 transition-all btn-active group">
                                                 <div className={`w-8 h-8 rounded-xl border-2 flex items-center justify-center transition-all ${state.completedTasks.includes(t.id) ? 'bg-indigo-500 border-indigo-500 shadow-lg shadow-indigo-500/50' : 'border-white/20'}`}>
@@ -266,6 +274,10 @@
                                     </div>
                                     <div className="absolute -bottom-10 -right-10 w-48 h-48 bg-indigo-500/10 blur-[80px] rounded-full group-hover:scale-125 transition-all"></div>
                                 </div>
+                                <div className="bg-white p-7 rounded-[2rem] border border-slate-100 shadow-sm space-y-3">
+                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Основной ресурс</p>
+                                    <p className="font-bold text-slate-800 text-sm leading-tight">{currentPhase.res}</p>
+                                </div>
                             </div>
                         )}
 
@@ -277,23 +289,24 @@
                                         <p className="text-[9px] font-black uppercase opacity-60 mb-2 leading-none">Общее время</p>
                                         <p className="text-2xl font-black">~{((daysPassed * 40) / 60).toFixed(0)} ч.</p>
                                     </div>
-                                    <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm text-center">
+                                    <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
                                         <p className="text-[9px] font-black uppercase text-slate-400 mb-2 leading-none">Выполнено</p>
-                                        <p className="text-2xl font-black text-slate-800 tracking-tighter">{totalTasksDone}</p>
+                                        <p className="text-2xl font-black text-slate-800 tracking-tighter">
+                                            {Object.values(state.history).reduce((a, b) => a + b, 0)}
+                                        </p>
                                     </div>
                                 </div>
                                 <div className="bg-white p-7 rounded-[2.5rem] border border-slate-100 shadow-sm h-40 flex items-end justify-between px-6">
                                     {[...Array(7)].map((_, i) => {
                                         const d = new Date(); d.setDate(d.getDate() - (6-i));
                                         const ds = d.toISOString().split('T')[0];
-                                        const count = state.history[ds] || 0;
-                                        const h = (count / 3) * 100;
+                                        const h = ((state.history[ds] || 0) / 3) * 100;
                                         return (
                                             <div key={i} className="flex flex-col items-center gap-2">
                                                 <div className="w-5 bg-slate-50 rounded-full h-20 relative overflow-hidden border border-slate-100">
                                                     <div className="absolute bottom-0 w-full bg-indigo-500 transition-all duration-700" style={{height: `${Math.min(100, h)}%`}} />
                                                 </div>
-                                                <span className="text-[8px] font-bold text-slate-300 uppercase">{d.toLocaleDateString('ru',{weekday:'short'})}</span>
+                                                <span className="text-[8px] font-bold text-slate-300 uppercase leading-none">{d.toLocaleDateString('ru',{weekday:'short'})}</span>
                                             </div>
                                         );
                                     })}
@@ -307,21 +320,23 @@
                                 <div className="bg-indigo-600 p-8 rounded-[2.5rem] text-white shadow-xl relative overflow-hidden">
                                     <h4 className="font-black text-lg mb-4 relative z-10 italic leading-tight">Протокол SST (70/30)</h4>
                                     <p className="text-xs opacity-90 leading-relaxed mb-4 relative z-10 text-indigo-50 italic">Студент говорит 70% времени. Учитель — только корректор. Приходите на урок с уже изученным материалом.</p>
+                                    <div className="bg-white/10 p-4 rounded-2xl relative z-10 border border-white/20 text-center backdrop-blur-sm shadow-sm"><p className="text-[10px] font-black uppercase tracking-widest text-indigo-100 leading-none">Активация центра Брока</p></div>
+                                    <div className="absolute -top-10 -left-10 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
                                 </div>
                                 <div className="bg-white p-7 rounded-[2.5rem] border border-slate-100 space-y-4 shadow-sm text-left">
-                                    <h4 className="font-black text-indigo-600 text-[10px] uppercase tracking-widest text-center">Циклы и Anki</h4>
+                                    <h4 className="font-black text-indigo-600 text-[10px] uppercase tracking-widest leading-none">Циклы и Anki</h4>
                                     <div className="grid grid-cols-2 gap-3">
-                                        <div className="p-4 bg-indigo-50 rounded-2xl text-[9px] leading-tight text-slate-600"><b>День А:</b> Ввод, анализ, новые слова в Anki.</div>
-                                        <div className="p-4 bg-emerald-50 rounded-2xl text-[9px] leading-tight text-slate-600"><b>День Б:</b> Вывод, Shadowing, пересказ.</div>
+                                        <div className="p-4 bg-indigo-50 rounded-2xl text-[9px] leading-tight text-slate-600"><b>День А:</b> Ввод, анализ, новые слова в Anki. Чтение и письмо.</div>
+                                        <div className="p-4 bg-emerald-50 rounded-2xl text-[9px] leading-tight text-slate-600"><b>День Б:</b> Вывод, Shadowing, пересказ, активация речи.</div>
                                     </div>
                                     <div className="flex gap-2 pt-2">
-                                        <div className="flex-1 p-2 bg-blue-500 rounded-xl text-[8px] font-black text-white text-center">DER (СИН)</div>
-                                        <div className="flex-1 p-2 bg-red-500 rounded-xl text-[8px] font-black text-white text-center">DIE (КР)</div>
-                                        <div className="flex-1 p-2 bg-emerald-500 rounded-xl text-[8px] font-black text-white text-center">DAS (ЗЕЛ)</div>
+                                        <div className="flex-1 p-2 bg-blue-500 rounded-xl text-[8px] font-black text-white text-center leading-none">DER (СИН)</div>
+                                        <div className="flex-1 p-2 bg-red-500 rounded-xl text-[8px] font-black text-white text-center leading-none">DIE (КР)</div>
+                                        <div className="flex-1 p-2 bg-emerald-500 rounded-xl text-[8px] font-black text-white text-center leading-none">DAS (ЗЕЛ)</div>
                                     </div>
                                 </div>
-                                <div className="bg-slate-900 p-8 rounded-[2.5rem] text-white space-y-4 text-center">
-                                    <h4 className="font-black text-indigo-400 text-[10px] uppercase tracking-widest">ChatGPT Tutor Prompt</h4>
+                                <div className="bg-slate-900 p-8 rounded-[2.5rem] text-white space-y-4 shadow-2xl relative overflow-hidden group">
+                                    <h4 className="font-black text-indigo-400 text-[10px] uppercase tracking-widest text-center leading-none">ChatGPT Tutor Prompt</h4>
                                     <button onClick={copyPrompt} className="w-full bg-indigo-600 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all btn-active shadow-lg shadow-indigo-600/20">{copyOk ? 'СКОПИРОВАНО!' : 'КОПИРОВАТЬ ПРОМПТ'}</button>
                                 </div>
                             </div>
@@ -329,15 +344,16 @@
 
                         {view === 'map' && (
                             <div className="space-y-4 animate-in">
-                                <h2 className="text-2xl font-black mb-6 px-1 italic leading-tight text-slate-900">Дорожная карта</h2>
+                                <h2 className="text-2xl font-black mb-6 px-1 italic leading-tight text-slate-800">Дорожная карта</h2>
                                 {PHASES.map(p => (
-                                    <div key={p.id} onClick={() => changePhaseManual(p.id)} className={`p-6 rounded-[2.5rem] border-2 transition-all cursor-pointer relative ${state.currentPhaseId === p.id ? 'bg-indigo-600 text-white border-indigo-500 shadow-xl scale-[1.02]' : 'bg-white border-slate-100 opacity-60 hover:opacity-100'}`}>
+                                    <div key={p.id} onClick={() => handleManualPhase(p.id)} className={`p-6 rounded-[2.5rem] border-2 transition-all cursor-pointer relative ${state.currentPhaseId === p.id ? 'bg-indigo-600 text-white border-indigo-500 shadow-xl scale-[1.02]' : 'bg-white border-slate-100 opacity-60 hover:opacity-100'}`}>
                                         <div className="flex justify-between items-center mb-1">
                                             <span className="text-[10px] font-black uppercase tracking-tighter opacity-80">{p.days} дней</span>
                                             <span className="font-black text-xl leading-none">{p.level}</span>
                                         </div>
                                         <h3 className="font-black text-lg leading-none">{p.name}</h3>
                                         <p className="text-[11px] opacity-70 mt-1 italic leading-tight">{p.res}</p>
+                                        {state.currentPhaseId === p.id && <div className="absolute top-3 right-3 text-white"><Svg.Check /></div>}
                                     </div>
                                 ))}
                             </div>
@@ -345,27 +361,35 @@
 
                         {view === 'settings' && (
                           <div className="space-y-6 animate-in">
-                              <h2 className="text-2xl font-black px-1 leading-tight text-slate-900 italic">Настройки</h2>
+                              <h2 className="text-2xl font-black px-1 leading-tight italic text-slate-800">Настройки</h2>
                               <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm space-y-6">
                                   <div className="flex items-center justify-between">
                                       <div>
                                           <p className="font-black text-slate-800 text-sm tracking-tight uppercase leading-none">Авто-переход</p>
-                                          <p className="text-[10px] text-slate-400 font-bold tracking-wider mt-2 italic">СМЕНА ЭТАПА ПО ДНЯМ</p>
+                                          <p className="text-[10px] text-slate-400 font-bold tracking-wider mt-2 italic leading-none">СМЕНА ЭТАПА ПО ДНЯМ</p>
                                       </div>
-                                      <button onClick={() => { const ns = {...state, autoAdvance: !state.autoAdvance}; setState(ns); save(ns); }} className={`w-14 h-7 rounded-full transition-all relative ${state.autoAdvance ? 'bg-indigo-600 shadow-lg shadow-indigo-200' : 'bg-slate-300'}`}>
+                                      <button onClick={() => {
+                                          const ns = {...state, autoAdvance: !state.autoAdvance};
+                                          setState(ns);
+                                          saveState(ns);
+                                      }} className={`w-14 h-7 rounded-full transition-all relative ${state.autoAdvance ? 'bg-indigo-600 shadow-lg shadow-indigo-200' : 'bg-slate-300'}`}>
                                           <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-transform duration-300 shadow-md ${state.autoAdvance ? 'left-8' : 'left-1'}`}></div>
                                       </button>
                                   </div>
                                   <div className="flex items-center justify-between pt-4 border-t border-slate-50">
                                       <div>
                                           <p className="font-black text-slate-800 text-sm tracking-tight uppercase leading-none">Уведомления</p>
+                                          <p className="text-[10px] text-slate-400 font-bold tracking-wider mt-2 italic leading-none text-center">НАПОМИНАТЬ О 40 МИНУТАХ</p>
                                       </div>
                                       <button onClick={toggleNotifications} className={`w-14 h-7 rounded-full transition-all relative ${state.notificationsEnabled ? 'bg-indigo-600 shadow-lg' : 'bg-slate-300'}`}>
                                           <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-transform duration-300 shadow-md ${state.notificationsEnabled ? 'left-8' : 'left-1'}`}></div>
                                       </button>
                                   </div>
-                                  <button onClick={() => window.open(`https://www.google.com/calendar/render?action=TEMPLATE&text=DeutschMeister%2040min&recur=RRULE:FREQ=DAILY`, '_blank')} className="w-full flex items-center justify-between p-5 bg-slate-900 rounded-[1.5rem] text-white font-bold text-[10px] uppercase tracking-widest shadow-xl active:scale-95 transition-all"><span>Google Calendar Sync</span><span>📅</span></button>
-                                  <button onClick={() => { if(confirm('Сбросить весь прогресс?')) { const ns = { ...state, startDate: new Date().toISOString(), currentPhaseId: 0, streak: 0, completedTasks: [], history: {} }; setState(ns); save(ns); } }} className="w-full p-5 text-center text-rose-500 font-bold text-[10px] uppercase tracking-widest bg-rose-50 rounded-[1.5rem] border border-rose-100 btn-active transition-all">Сбросить обучение</button>
+                                  <button onClick={() => window.open(`https://www.google.com/calendar/render?action=TEMPLATE&text=DeutschMeister%2040min&recur=RRULE:FREQ=DAILY`, '_blank')} className="w-full flex items-center justify-between p-5 bg-slate-900 rounded-[1.5rem] text-white font-bold text-[10px] uppercase tracking-widest shadow-xl active:scale-95 transition-all leading-none"><span>Google Calendar Sync</span><span>📅</span></button>
+                                  <button onClick={() => { if(confirm('Сбросить весь прогресс?')) { 
+                                      setState(INITIAL_STATE);
+                                      saveState(INITIAL_STATE);
+                                  } }} className="w-full p-5 text-center text-rose-500 font-bold text-[10px] uppercase tracking-widest bg-rose-50 rounded-[1.5rem] border border-rose-100 btn-active transition-all leading-none">Сбросить обучение</button>
                               </div>
                           </div>
                         )}
@@ -373,11 +397,11 @@
 
                     <nav className="fixed bottom-0 left-0 right-0 glass border-t border-slate-100 px-6 pb-10 pt-4 z-50 rounded-t-[2.5rem] shadow-lg">
                         <div className="max-w-md mx-auto flex justify-between items-center px-4">
-                            <button onClick={() => setView('home')} className={`flex flex-col items-center gap-1.5 transition-all opacity-40 ${view === 'home' ? 'text-indigo-600 scale-110 opacity-100' : ''}`}><Svg.Zap /><span className="text-[8px] font-black uppercase mt-1 tracking-tighter">План</span></button>
-                            <button onClick={() => setView('stats')} className={`flex flex-col items-center gap-1.5 transition-all opacity-40 ${view === 'stats' ? 'text-indigo-600 scale-110 opacity-100' : ''}`}><Svg.Chart /><span className="text-[8px] font-black uppercase mt-1 tracking-tighter">Статс</span></button>
-                            <button onClick={() => setView('method')} className={`flex flex-col items-center gap-1.5 transition-all opacity-40 ${view === 'method' ? 'text-indigo-600 scale-110 opacity-100' : ''}`}><Svg.Book /><span className="text-[8px] font-black uppercase mt-1 tracking-tighter">Метод</span></button>
-                            <button onClick={() => setView('map')} className={`flex flex-col items-center gap-1.5 transition-all opacity-40 ${view === 'map' ? 'text-indigo-600 scale-110 opacity-100' : ''}`}><Svg.Map /><span className="text-[8px] font-black uppercase mt-1 tracking-tighter">Карта</span></button>
-                            <button onClick={() => setView('settings')} className={`flex flex-col items-center gap-1.5 transition-all opacity-40 ${view === 'settings' ? 'text-indigo-600 scale-110 opacity-100' : ''}`}><Svg.Gear /><span className="text-[8px] font-black uppercase mt-1 tracking-tighter">Опции</span></button>
+                            <button onClick={() => setView('home')} className={`flex flex-col items-center gap-1.5 transition-all opacity-40 ${view === 'home' ? 'text-indigo-600 scale-110 opacity-100 font-black' : ''}`}><Svg.Zap /><span className="text-[8px] font-black uppercase mt-1 tracking-tighter leading-none">План</span></button>
+                            <button onClick={() => setView('stats')} className={`flex flex-col items-center gap-1.5 transition-all opacity-40 ${view === 'stats' ? 'text-indigo-600 scale-110 opacity-100 font-black' : ''}`}><Svg.Chart /><span className="text-[8px] font-black uppercase mt-1 tracking-tighter leading-none">Статс</span></button>
+                            <button onClick={() => setView('method')} className={`flex flex-col items-center gap-1.5 transition-all opacity-40 ${view === 'method' ? 'text-indigo-600 scale-110 opacity-100 font-black' : ''}`}><Svg.Book /><span className="text-[8px] font-black uppercase mt-1 tracking-tighter leading-none">Метод</span></button>
+                            <button onClick={() => setView('map')} className={`flex flex-col items-center gap-1.5 transition-all opacity-40 ${view === 'map' ? 'text-indigo-600 scale-110 opacity-100 font-black' : ''}`}><Svg.Map /><span className="text-[8px] font-black uppercase mt-1 tracking-tighter leading-none">Карта</span></button>
+                            <button onClick={() => setView('settings')} className={`flex flex-col items-center gap-1.5 transition-all opacity-40 ${view === 'settings' ? 'text-indigo-600 scale-110 opacity-100 font-black' : ''}`}><Svg.Gear /><span className="text-[8px] font-black uppercase mt-1 tracking-tighter leading-none">Опции</span></button>
                         </div>
                     </nav>
                 </div>
