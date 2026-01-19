@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>DeutschMeister Pro | C1 System</title>
+    <title>DeutschMeister Pro | C1 Blueprint</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -29,7 +29,22 @@
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-        const firebaseConfig = JSON.parse(__firebase_config);
+        // Безопасная инициализация конфига
+        let firebaseConfig = {};
+        try {
+            firebaseConfig = JSON.parse(__firebase_config);
+        } catch (e) {
+            // Фолбэк конфиг для локального тестирования (если __firebase_config не определен)
+            firebaseConfig = {
+                apiKey: "AIzaSyBRAeIilgqixdDrBQFThpx00D2Te0gPuY0",
+                authDomain: "deutschmeister-489ea.firebaseapp.com",
+                projectId: "deutschmeister-489ea",
+                storageBucket: "deutschmeister-489ea.firebasestorage.app",
+                messagingSenderId: "82755973685",
+                appId: "1:82755973685:web:3413021c19d391107a777c"
+            };
+        }
+
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
@@ -46,7 +61,7 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo, useCallback, useRef } = React;
 
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'deutsch-meister-pro-v15';
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'deutsch-meister-v16';
 
         const PHASES = [
             { id: 0, level: 'A1', name: 'Закладка фундамента', days: 90, res: 'Nicos Weg A1', tasksA: [{id:'a1_1', title:'Nicos Weg: Анализ', time:20, type:'Input'}, {id:'a1_2', title:'Anki: Новые карты', time:10, type:'Memory'}, {id:'a1_3', title:'V2 Rule: Синтаксис', time:10, type:'Study'}], tasksB: [{id:'b1_1', title:'Shadowing (NW)', time:15, type:'Output'}, {id:'b1_2', title:'Anki: Повторение', time:15, type:'Memory'}, {id:'b1_3', title:'SST: Монолог', time:10, type:'Output'}] },
@@ -80,47 +95,48 @@
             const [user, setUser] = useState(null);
             const [view, setView] = useState('home');
             const [state, setState] = useState(INITIAL_STATE);
-            const [dataReady, setDataReady] = useState(false);
+            const [dataLoaded, setDataLoaded] = useState(false);
             const [copyOk, setCopyOk] = useState(false);
 
-            // 1. Инициализация Auth
+            // 1. Auth logic
             useEffect(() => {
-                const initAuth = async () => {
-                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                        await window.API.signInWithCustomToken(window.API.auth, __initial_auth_token);
-                    } else {
-                        await window.API.signInAnonymously(window.API.auth);
+                const unsubscribe = window.API.onAuthStateChanged(window.API.auth, async (u) => {
+                    if (!u) {
+                        try {
+                            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                                await window.API.signInWithCustomToken(window.API.auth, __initial_auth_token);
+                            } else {
+                                await window.API.signInAnonymously(window.API.auth);
+                            }
+                        } catch (e) { console.error("Auth init failed", e); }
                     }
-                };
-                initAuth();
-                const unsub = window.API.onAuthStateChanged(window.API.auth, setUser);
-                return () => unsub();
+                    setUser(u);
+                });
+                return () => unsubscribe();
             }, []);
 
-            // 2. Инициализация Данных (Только после Auth)
+            // 2. Data logic
             useEffect(() => {
                 if (!user) return;
-                const docRef = window.API.doc(window.API.db, 'artifacts', appId, 'users', user.uid, 'state', 'data');
+                const path = window.API.doc(window.API.db, 'artifacts', appId, 'users', user.uid, 'state', 'data');
                 
-                const unsub = window.API.onSnapshot(docRef, (snap) => {
+                const unsub = window.API.onSnapshot(path, (snap) => {
                     if (snap.exists()) {
                         setState(snap.data());
                     } else {
-                        // Если документа нет, создаем его один раз
-                        window.API.setDoc(docRef, INITIAL_STATE);
+                        window.API.setDoc(path, INITIAL_STATE);
                     }
-                    setDataReady(true);
-                }, (err) => console.error("Firebase Error:", err));
+                    setDataLoaded(true);
+                }, (err) => console.error("Firestore error", err));
 
                 return () => unsub();
             }, [user]);
 
-            // 3. Функция сохранения (Прямая запись)
             const pushUpdate = useCallback(async (newState) => {
-                if (!user || !dataReady) return;
-                const docRef = window.API.doc(window.API.db, 'artifacts', appId, 'users', user.uid, 'state', 'data');
-                await window.API.setDoc(docRef, newState);
-            }, [user, dataReady]);
+                if (!user || !dataLoaded) return;
+                const path = window.API.doc(window.API.db, 'artifacts', appId, 'users', user.uid, 'state', 'data');
+                await window.API.setDoc(path, newState);
+            }, [user, dataLoaded]);
 
             const daysPassed = useMemo(() => {
                 const diff = new Date() - new Date(state.startDate);
@@ -131,10 +147,9 @@
             const currentPhase = PHASES[state.currentPhaseId];
             const tasks = isDayA ? currentPhase.tasksA : currentPhase.tasksB;
 
-            // Авто-переход по этапам
+            // Auto-advance Logic
             useEffect(() => {
-                if (!dataReady || !state.autoAdvance) return;
-                
+                if (!dataLoaded || !state.autoAdvance) return;
                 let cumulative = 0;
                 let targetId = 0;
                 for (let i = 0; i < PHASES.length; i++) {
@@ -145,12 +160,10 @@
                     }
                     if (i === PHASES.length - 1) targetId = i;
                 }
-
                 if (state.currentPhaseId !== targetId) {
-                    const ns = { ...state, currentPhaseId: targetId, completedTasks: [] };
-                    pushUpdate(ns);
+                    pushUpdate({ ...state, currentPhaseId: targetId, completedTasks: [] });
                 }
-            }, [daysPassed, dataReady, state.autoAdvance, state.currentPhaseId]);
+            }, [daysPassed, dataLoaded, state.autoAdvance, state.currentPhaseId, pushUpdate]);
 
             const toggleTask = (id) => {
                 const isDone = state.completedTasks.includes(id);
@@ -164,47 +177,21 @@
                 const newHistory = { ...state.history };
                 newHistory[today] = nt.length;
 
-                const newState = { ...state, completedTasks: nt, lastActivity: todayHuman, streak: ns, history: newHistory };
-                // Мы не ждем setState, мы пушим в Firebase, onSnapshot обновит UI
-                pushUpdate(newState);
+                pushUpdate({ ...state, completedTasks: nt, lastActivity: todayHuman, streak: ns, history: newHistory });
             };
 
             const changePhaseManual = (pid) => {
-                if (window.confirm("Сменить этап вручную? Это отключит автоматический переход.")) {
-                    const ns = { ...state, currentPhaseId: pid, completedTasks: [], autoAdvance: false };
-                    pushUpdate(ns);
+                if (window.confirm("Сменить этап вручную?")) {
+                    pushUpdate({ ...state, currentPhaseId: pid, completedTasks: [], autoAdvance: false });
                     setView('home');
                 }
             };
 
-            const toggleNotifications = async () => {
-                if (state.notificationsEnabled) {
-                    pushUpdate({...state, notificationsEnabled: false});
-                } else {
-                    const res = await Notification.requestPermission();
-                    if (res === 'granted') {
-                        pushUpdate({...state, notificationsEnabled: true});
-                        new Notification("Meister", { body: "Уведомления включены!" });
-                    } else {
-                        alert("Разрешите уведомления в настройках браузера.");
-                    }
-                }
-            };
-
-            const copyPrompt = () => {
-                const p = `Ты — профессиональный DaF-преподаватель. Я учу немецкий на уровне ${currentPhase.level}. Исправляй ошибки, объясняй правила, указывай род (der/die/das).`;
-                navigator.clipboard.writeText(p);
-                setCopyOk(true);
-                setTimeout(() => setCopyOk(false), 2000);
-            };
-
-            if (!dataReady && user) {
+            if (!dataLoaded && user) {
                 return (
-                    <div className="h-screen flex items-center justify-center bg-white">
-                        <div className="flex flex-col items-center gap-4">
-                            <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-                            <p className="text-xs font-black text-indigo-600 uppercase tracking-widest">Загрузка данных...</p>
-                        </div>
+                    <div className="h-screen flex flex-col items-center justify-center bg-white gap-4">
+                        <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                        <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Laden...</p>
                     </div>
                 );
             }
@@ -225,7 +212,7 @@
                         <div className="flex items-center gap-3">
                             {user && !user.isAnonymous ? (
                                 <div className="flex items-center gap-2">
-                                    <img src={user.photoURL} className="w-9 h-9 rounded-full border-2 border-indigo-100 shadow-sm" alt="User" />
+                                    <img src={user.photoURL} className="w-9 h-9 rounded-full border-2 border-indigo-100 shadow-sm" alt="Profile" />
                                     <button onClick={() => window.API.signOut(window.API.auth).then(() => window.location.reload())} className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter hover:text-rose-500">Выход</button>
                                 </div>
                             ) : (
@@ -255,10 +242,10 @@
 
                                 <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white shadow-2xl relative overflow-hidden group">
                                     <div className="relative z-10 space-y-4">
-                                        <h3 className="text-2xl font-black mb-6 italic">40 Минут <span className="text-indigo-400 uppercase tracking-tighter">fokus</span></h3>
+                                        <h3 className="text-2xl font-black mb-6 italic tracking-tight">40 Минут <span className="text-indigo-400 uppercase tracking-tighter">fokus</span></h3>
                                         {tasks.map(t => (
                                             <div key={t.id} onClick={() => toggleTask(t.id)} className="flex items-center gap-4 bg-white/5 p-4 rounded-[1.8rem] border border-white/5 cursor-pointer hover:bg-white/10 transition-all btn-active group">
-                                                <div className={`w-8 h-8 rounded-xl border-2 flex items-center justify-center transition-all ${state.completedTasks.includes(t.id) ? 'bg-indigo-500 border-indigo-500 shadow-lg' : 'border-white/20'}`}>
+                                                <div className={`w-8 h-8 rounded-xl border-2 flex items-center justify-center transition-all ${state.completedTasks.includes(t.id) ? 'bg-indigo-500 border-indigo-500 shadow-lg shadow-indigo-500/50' : 'border-white/20'}`}>
                                                     {state.completedTasks.includes(t.id) && <Svg.Check />}
                                                 </div>
                                                 <div className="flex-grow">
@@ -270,8 +257,8 @@
                                     </div>
                                     <div className="absolute -bottom-10 -right-10 w-48 h-48 bg-indigo-500/10 blur-[80px] rounded-full group-hover:scale-125 transition-all"></div>
                                 </div>
-                                <div className="bg-white p-7 rounded-[2rem] border border-slate-100 shadow-sm space-y-3">
-                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Основной ресурс</p>
+                                <div className="bg-white p-7 rounded-[2rem] border border-slate-100 shadow-sm space-y-2">
+                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Основной ресурс</p>
                                     <p className="font-bold text-slate-800 text-sm leading-tight">{currentPhase.res}</p>
                                 </div>
                             </div>
@@ -279,14 +266,14 @@
 
                         {view === 'stats' && (
                             <div className="space-y-6 animate-in text-center">
-                                <h2 className="text-2xl font-black px-1 leading-tight text-slate-900 italic">Статистика</h2>
+                                <h2 className="text-2xl font-black px-1 leading-tight text-slate-900 italic tracking-tight">Статистика</h2>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="bg-indigo-600 p-6 rounded-[2rem] text-white shadow-xl">
-                                        <p className="text-[9px] font-black uppercase opacity-60 mb-2 leading-none">Общее время</p>
+                                        <p className="text-[9px] font-black uppercase opacity-60 mb-2 leading-none tracking-widest">Общее время</p>
                                         <p className="text-2xl font-black">~{((daysPassed * 40) / 60).toFixed(0)} ч.</p>
                                     </div>
-                                    <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm text-center">
-                                        <p className="text-[9px] font-black uppercase text-slate-400 mb-2 leading-none">Выполнено</p>
+                                    <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
+                                        <p className="text-[9px] font-black uppercase text-slate-400 mb-2 leading-none tracking-widest">Выполнено</p>
                                         <p className="text-2xl font-black text-slate-800 tracking-tighter">
                                             {Object.values(state.history || {}).reduce((a, b) => a + b, 0)}
                                         </p>
@@ -299,7 +286,7 @@
                                         const h = (((state.history || {})[ds] || 0) / 3) * 100;
                                         return (
                                             <div key={i} className="flex flex-col items-center gap-2">
-                                                <div className="w-5 bg-slate-50 rounded-full h-20 relative overflow-hidden border border-slate-100">
+                                                <div className="w-5 bg-slate-50 rounded-full h-20 relative overflow-hidden border border-slate-100 shadow-inner">
                                                     <div className="absolute bottom-0 w-full bg-indigo-500 transition-all duration-700" style={{height: `${Math.min(100, h)}%`}} />
                                                 </div>
                                                 <span className="text-[8px] font-bold text-slate-300 uppercase leading-none">{d.toLocaleDateString('ru',{weekday:'short'})}</span>
@@ -312,7 +299,7 @@
 
                         {view === 'method' && (
                             <div className="space-y-6 animate-in">
-                                <h2 className="text-2xl font-black px-1 leading-tight text-slate-900 italic">Методология</h2>
+                                <h2 className="text-2xl font-black px-1 leading-tight text-slate-900 italic tracking-tight">Методология</h2>
                                 <div className="bg-indigo-600 p-8 rounded-[2.5rem] text-white shadow-xl relative overflow-hidden">
                                     <h4 className="font-black text-lg mb-4 relative z-10 italic leading-tight">Протокол SST (70/30)</h4>
                                     <p className="text-xs opacity-90 leading-relaxed mb-4 relative z-10 text-indigo-50 italic">Студент говорит 70% времени. Учитель — только корректор. Приходите на урок с уже изученным материалом.</p>
@@ -331,16 +318,19 @@
                                         <div className="flex-1 p-2 bg-emerald-500 rounded-xl text-[8px] font-black text-white text-center leading-none">DAS (ЗЕЛ)</div>
                                     </div>
                                 </div>
-                                <div className="bg-slate-900 p-8 rounded-[2.5rem] text-white space-y-4">
+                                <div className="bg-slate-900 p-8 rounded-[2.5rem] text-white space-y-4 relative overflow-hidden">
                                     <h4 className="font-black text-indigo-400 text-[10px] uppercase tracking-widest text-center leading-none">ChatGPT Tutor Prompt</h4>
-                                    <button onClick={copyPrompt} className="w-full bg-indigo-600 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all btn-active shadow-lg shadow-indigo-600/20">{copyOk ? 'СКОПИРОВАНО!' : 'КОПИРОВАТЬ ПРОМПТ'}</button>
+                                    <button onClick={() => {
+                                        const p = `Ты — DaF-преподаватель. Я на уровне ${currentPhase.level}. Исправляй мои тексты, объясняй правила и указывай род существительных.`;
+                                        navigator.clipboard.writeText(p); setCopyOk(true); setTimeout(() => setCopyOk(false), 2000);
+                                    }} className="w-full bg-indigo-600 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all btn-active shadow-lg shadow-indigo-600/20">{copyOk ? 'СКОПИРОВАНО!' : 'КОПИРОВАТЬ ПРОМПТ'}</button>
                                 </div>
                             </div>
                         )}
 
                         {view === 'map' && (
                             <div className="space-y-4 animate-in">
-                                <h2 className="text-2xl font-black mb-6 px-1 italic leading-tight text-slate-800">Дорожная карта</h2>
+                                <h2 className="text-2xl font-black mb-6 px-1 italic leading-tight text-slate-800 tracking-tight">Дорожная карта</h2>
                                 {PHASES.map(p => (
                                     <div key={p.id} onClick={() => changePhaseManual(p.id)} className={`p-6 rounded-[2.5rem] border-2 transition-all cursor-pointer relative ${state.currentPhaseId === p.id ? 'bg-indigo-600 text-white border-indigo-500 shadow-xl scale-[1.02]' : 'bg-white border-slate-100 opacity-60 hover:opacity-100'}`}>
                                         <div className="flex justify-between items-center mb-1">
@@ -357,33 +347,21 @@
 
                         {view === 'settings' && (
                           <div className="space-y-6 animate-in">
-                              <h2 className="text-2xl font-black px-1 leading-tight italic text-slate-800">Настройки</h2>
+                              <h2 className="text-2xl font-black px-1 leading-tight italic text-slate-800 tracking-tight">Настройки</h2>
                               <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm space-y-6">
                                   <div className="flex items-center justify-between">
                                       <div>
                                           <p className="font-black text-slate-800 text-sm tracking-tight uppercase leading-none">Авто-переход</p>
-                                          <p className="text-[10px] text-slate-400 font-bold tracking-wider mt-2 italic leading-none">СМЕНА ЭТАПА ПО ДНЯМ</p>
+                                          <p className="text-[10px] text-slate-400 font-bold tracking-wider mt-2 italic leading-none">ПО ДНЯМ ОБУЧЕНИЯ</p>
                                       </div>
-                                      <button onClick={() => {
-                                          const ns = {...state, autoAdvance: !state.autoAdvance};
-                                          pushUpdate(ns);
-                                      }} className={`w-14 h-7 rounded-full transition-all relative ${state.autoAdvance ? 'bg-indigo-600 shadow-lg shadow-indigo-200' : 'bg-slate-300'}`}>
+                                      <button onClick={() => pushUpdate({...state, autoAdvance: !state.autoAdvance})} className={`w-14 h-7 rounded-full transition-all relative ${state.autoAdvance ? 'bg-indigo-600 shadow-lg shadow-indigo-200' : 'bg-slate-300'}`}>
                                           <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-transform duration-300 shadow-md ${state.autoAdvance ? 'left-8' : 'left-1'}`}></div>
                                       </button>
                                   </div>
-                                  <div className="flex items-center justify-between pt-4 border-t border-slate-50">
-                                      <div>
-                                          <p className="font-black text-slate-800 text-sm tracking-tight uppercase leading-none">Уведомления</p>
-                                          <p className="text-[10px] text-slate-400 font-bold tracking-wider mt-2 italic leading-none text-center">НАПОМИНАТЬ О 40 МИНУТАХ</p>
-                                      </div>
-                                      <button onClick={toggleNotifications} className={`w-14 h-7 rounded-full transition-all relative ${state.notificationsEnabled ? 'bg-indigo-600 shadow-lg' : 'bg-slate-300'}`}>
-                                          <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-transform duration-300 shadow-md ${state.notificationsEnabled ? 'left-8' : 'left-1'}`}></div>
-                                      </button>
+                                  <div className="pt-4 border-t border-slate-50 flex flex-col gap-4">
+                                    <button onClick={() => window.open(`https://www.google.com/calendar/render?action=TEMPLATE&text=DeutschMeister%20Training&recur=RRULE:FREQ=DAILY`, '_blank')} className="w-full flex items-center justify-between p-5 bg-slate-900 rounded-[1.5rem] text-white font-bold text-[10px] uppercase tracking-widest shadow-xl active:scale-95 transition-all leading-none"><span>Google Calendar</span><span>📅</span></button>
+                                    <button onClick={() => { if(confirm('Сбросить весь прогресс?')) { pushUpdate(INITIAL_STATE); } }} className="w-full p-5 text-center text-rose-500 font-bold text-[10px] uppercase tracking-widest bg-rose-50 rounded-[1.5rem] border border-rose-100 btn-active transition-all leading-none">Сбросить всё</button>
                                   </div>
-                                  <button onClick={() => window.open(`https://www.google.com/calendar/render?action=TEMPLATE&text=DeutschMeister%2040min&recur=RRULE:FREQ=DAILY`, '_blank')} className="w-full flex items-center justify-between p-5 bg-slate-900 rounded-[1.5rem] text-white font-bold text-[10px] uppercase tracking-widest shadow-xl active:scale-95 transition-all leading-none"><span>Google Calendar Sync</span><span>📅</span></button>
-                                  <button onClick={() => { if(confirm('Сбросить весь прогресс?')) { 
-                                      pushUpdate(INITIAL_STATE);
-                                  } }} className="w-full p-5 text-center text-rose-500 font-bold text-[10px] uppercase tracking-widest bg-rose-50 rounded-[1.5rem] border border-rose-100 btn-active transition-all leading-none">Сбросить обучение</button>
                               </div>
                           </div>
                         )}
