@@ -3,9 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>DeutschMeister Pro | C1 Blueprint</title>
+    <title>DeutschMeister Pro | C1 System</title>
     
-    <!-- Libraries -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -13,23 +12,22 @@
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap');
-        body { font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; overflow-x: hidden; }
-        .glass { background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(10px); }
-        .card-shadow { box-shadow: 0 20px 40px -15px rgba(0,0,0,0.1); }
+        body { font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
+        .glass { background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(12px); }
         .animate-in { animation: fadeIn 0.4s ease-out forwards; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .no-scrollbar::-webkit-scrollbar { display: none; }
+        .btn-active:active { transform: scale(0.95); }
     </style>
 </head>
 <body class="bg-[#F8FAFC]">
     <div id="root"></div>
 
-    <!-- FIREBASE SYSTEM -->
+    <!-- FIREBASE SDK -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-        import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-analytics.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyBRAeIilgqixdDrBQFThpx00D2Te0gPuY0",
@@ -44,16 +42,16 @@
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
-        const analytics = getAnalytics(app);
         const provider = new GoogleAuthProvider();
+        provider.setCustomParameters({ prompt: 'select_account' }); // Всегда запрашивать выбор аккаунта
 
-        window.APP_CORE = { 
+        window.API = { 
             auth, db, provider, signInWithPopup, signOut, 
             onAuthStateChanged, signInAnonymously, doc, setDoc, onSnapshot 
         };
     </script>
 
-    <!-- REACT APPLICATION -->
+    <!-- REACT APP -->
     <script type="text/babel">
         const { useState, useEffect, useMemo, useCallback } = React;
 
@@ -68,38 +66,65 @@
         function App() {
             const [user, setUser] = useState(null);
             const [view, setView] = useState('home');
-            const [copyStatus, setCopyStatus] = useState(false);
+            const [error, setError] = useState(null);
             const [state, setState] = useState({ currentPhaseId: 0, completedTasks: [], streak: 0, startDate: new Date().toISOString(), lastActivity: new Date().toDateString(), autoAdvance: true });
 
-            // Initialize Auth (Rule 3)
             useEffect(() => {
-                const interval = setInterval(() => {
-                    if (window.APP_CORE) {
-                        clearInterval(interval);
-                        window.APP_CORE.onAuthStateChanged(window.APP_CORE.auth, (u) => {
-                            if (!u) window.APP_CORE.signInAnonymously(window.APP_CORE.auth);
+                const init = setInterval(() => {
+                    if (window.API) {
+                        clearInterval(init);
+                        window.API.onAuthStateChanged(window.API.auth, (u) => {
+                            if (!u) window.API.signInAnonymously(window.API.auth);
                             setUser(u);
                         });
                     }
                 }, 50);
-                return () => clearInterval(interval);
+                return () => clearInterval(init);
             }, []);
 
-            // Firestore Sync (Rule 1)
             useEffect(() => {
-                if (!user || !window.APP_CORE) return;
-                const path = window.APP_CORE.doc(window.APP_CORE.db, "artifacts", "german-v1", "users", user.uid, "settings", "state");
-                const unsub = window.APP_CORE.onSnapshot(path, (snap) => {
+                if (!user || !window.API) return;
+                const path = window.API.doc(window.API.db, "artifacts", "deutsch-pro-v1", "users", user.uid, "settings", "state");
+                const unsub = window.API.onSnapshot(path, (snap) => {
                     if (snap.exists()) setState(prev => ({ ...prev, ...snap.data() }));
                 });
                 return () => unsub();
             }, [user]);
 
             const save = (ns) => {
-                if (!user || user.isAnonymous || !window.APP_CORE) return;
-                const path = window.APP_CORE.doc(window.APP_CORE.db, "artifacts", "german-v1", "users", user.uid, "settings", "state");
-                window.APP_CORE.setDoc(path, ns);
+                if (!user || user.isAnonymous || !window.API) return;
+                const path = window.API.doc(window.API.db, "artifacts", "deutsch-pro-v1", "users", user.uid, "settings", "state");
+                window.API.setDoc(path, ns);
             };
+
+            const handleLogin = async () => {
+                setError(null);
+                try {
+                    await window.API.signInWithPopup(window.API.auth, window.API.provider);
+                } catch (e) {
+                    console.error(e);
+                    if (e.code === 'auth/unauthorized-domain') {
+                        setError("Ошибка: Домен не авторизован. Добавьте текущий адрес в Firebase Console -> Authentication -> Settings -> Authorized domains.");
+                    } else {
+                        setError("Не удалось открыть окно входа. Попробуйте обновить страницу.");
+                    }
+                }
+            };
+
+            const handleLogout = async () => {
+                if (confirm("Выйти из аккаунта Google? Прогресс будет доступен только при повторном входе.")) {
+                    await window.API.signOut(window.API.auth);
+                    window.location.reload();
+                }
+            };
+
+            const daysPassed = useMemo(() => {
+                return Math.max(0, Math.floor((new Date() - new Date(state.startDate)) / 86400000));
+            }, [state.startDate]);
+
+            const isDayA = daysPassed % 2 === 0;
+            const currentPhase = PHASES[state.currentPhaseId];
+            const tasks = isDayA ? currentPhase.tasksA : currentPhase.tasksB;
 
             const toggleTask = (id) => {
                 const isDone = state.completedTasks.includes(id);
@@ -112,37 +137,11 @@
                 save(newState);
             };
 
-            const daysPassed = useMemo(() => {
-                return Math.max(0, Math.floor((new Date() - new Date(state.startDate)) / 86400000));
-            }, [state.startDate]);
-
-            const isDayA = daysPassed % 2 === 0;
-            const currentPhase = PHASES[state.currentPhaseId];
-            const activeTasks = isDayA ? currentPhase.tasksA : currentPhase.tasksB;
-
-            const copyPrompt = () => {
-                const p = `Ты профессиональный DaF-преподаватель. Я на уровне ${currentPhase.level}. Исправляй мои ошибки, объясняй правила и указывай род (der/die/das).`;
-                navigator.clipboard.writeText(p);
-                setCopyStatus(true);
-                setTimeout(() => setCopyStatus(false), 2000);
-            };
-
-            const handleProfileClick = async () => {
-                if (user?.isAnonymous) {
-                    try {
-                        await window.APP_CORE.signInWithPopup(window.APP_CORE.auth, window.APP_CORE.provider);
-                    } catch (e) { alert("Ошибка входа: Добавьте этот домен в Authorized Domains в Firebase!"); }
-                } else {
-                    if (confirm("Выйти из аккаунта?")) window.APP_CORE.signOut(window.APP_CORE.auth);
-                }
-            };
-
             return (
-                <div className="max-w-md mx-auto min-h-screen flex flex-col pb-28">
-                    {/* TOP NAVBAR */}
-                    <header className="bg-white/90 p-5 flex justify-between items-center sticky top-0 z-50 border-b border-slate-100 backdrop-blur-md">
+                <div className="max-w-md mx-auto min-h-screen bg-[#F8FAFC] flex flex-col pb-28 shadow-xl">
+                    <header className="bg-white p-5 flex justify-between items-center sticky top-0 z-50 border-b border-slate-100 shadow-sm">
                         <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-200">
+                            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg">
                                 <span className="text-white font-black text-xl">D</span>
                             </div>
                             <div>
@@ -150,81 +149,71 @@
                                 <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Day {daysPassed + 1}/547</p>
                             </div>
                         </div>
-                        <button 
-                            onClick={handleProfileClick}
-                            className={`w-11 h-11 rounded-2xl border-2 flex items-center justify-center transition-all active:scale-90 shadow-sm ${user?.isAnonymous ? 'bg-slate-50 border-slate-200' : 'bg-indigo-50 border-indigo-200'}`}
-                        >
-                            {user?.photoURL ? (
-                                <img src={user.photoURL} className="w-full h-full rounded-2xl" />
+                        
+                        <div className="flex items-center gap-3">
+                            {user && !user.isAnonymous ? (
+                                <div className="flex items-center gap-2">
+                                    <img src={user.photoURL} className="w-9 h-9 rounded-full border-2 border-indigo-100 shadow-sm" alt="User" />
+                                    <button onClick={handleLogout} className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter hover:text-rose-500">Выход</button>
+                                </div>
                             ) : (
-                                <span className="text-lg opacity-50">👤</span>
+                                <button 
+                                    onClick={handleLogin}
+                                    className="bg-indigo-600 text-white text-[10px] px-4 py-2 rounded-xl font-bold shadow-md hover:bg-indigo-700 btn-active"
+                                >
+                                    ВОЙТИ
+                                </button>
                             )}
-                        </button>
+                        </div>
                     </header>
 
-                    <main className="p-6 flex-grow overflow-y-auto no-scrollbar">
-                        {/* Plateau Warning */}
-                        {daysPassed >= 240 && daysPassed <= 254 && (
-                            <div className="bg-orange-50 border border-orange-200 p-4 rounded-3xl mb-6 flex gap-3 animate-in">
-                                <span className="text-xl">⚠️</span>
-                                <p className="text-[11px] text-orange-800 leading-relaxed font-medium"><strong>B1 Plateau:</strong> Рекомендован 2-недельный перерыв от Anki. Только чтение и видео.</p>
-                            </div>
-                        )}
+                    {error && (
+                        <div className="m-4 p-4 bg-rose-50 border border-rose-100 rounded-2xl text-[11px] text-rose-600 leading-relaxed animate-in">
+                            {error}
+                        </div>
+                    )}
 
+                    <main className="p-6 flex-grow overflow-y-auto no-scrollbar">
                         {view === 'home' && (
                             <div className="space-y-6 animate-in">
                                 <div className="flex justify-between items-end">
-                                    <div className="space-y-1">
-                                        <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest">{isDayA ? 'Цикл A: Input' : 'Цикл B: Output'}</p>
+                                    <div>
+                                        <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest">{isDayA ? 'Цикл A: Ввод' : 'Цикл B: Вывод'}</p>
                                         <h2 className="text-2xl font-black text-slate-800 leading-tight">План на сегодня</h2>
                                     </div>
                                     <div className="flex flex-col items-end gap-1">
-                                        <span className="text-[10px] font-black text-white bg-indigo-600 px-3 py-1 rounded-full shadow-md uppercase">{currentPhase.level}</span>
-                                        <span className="text-[10px] text-orange-500 font-black">🔥 {state.streak} TAGE</span>
+                                        <span className="text-[10px] font-black text-white bg-indigo-600 px-3 py-1 rounded-full uppercase">{currentPhase.level}</span>
+                                        <span className="text-[10px] text-orange-500 font-black">🔥 Стрик: {state.streak}</span>
                                     </div>
                                 </div>
 
-                                <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white shadow-2xl relative overflow-hidden group">
+                                <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white shadow-2xl relative overflow-hidden">
                                     <div className="relative z-10 space-y-4">
-                                        <h3 className="text-2xl font-black mb-6">40 Минут <span className="text-indigo-400 uppercase tracking-tighter">Интенсива</span></h3>
-                                        {activeTasks.map(t => (
-                                            <div key={t.id} onClick={() => toggleTask(t.id)} className="flex items-center gap-4 bg-white/5 p-4 rounded-3xl border border-white/5 cursor-pointer hover:bg-white/10 transition-all active:scale-95 group">
-                                                <div className={`w-8 h-8 rounded-xl border-2 flex items-center justify-center transition-all ${state.completedTasks.includes(t.id) ? 'bg-indigo-500 border-indigo-500 shadow-lg' : 'border-white/20'}`}>
+                                        <h3 className="text-2xl font-black mb-6">40 Минут <span className="text-indigo-400 uppercase">Фокуса</span></h3>
+                                        {tasks.map(t => (
+                                            <div key={t.id} onClick={() => toggleTask(t.id)} className="flex items-center gap-4 bg-white/5 p-4 rounded-3xl border border-white/5 cursor-pointer hover:bg-white/10 transition-all btn-active">
+                                                <div className={`w-8 h-8 rounded-xl border-2 flex items-center justify-center ${state.completedTasks.includes(t.id) ? 'bg-indigo-500 border-indigo-500 shadow-lg' : 'border-white/20'}`}>
                                                     {state.completedTasks.includes(t.id) && <span className="text-white text-xs">✓</span>}
                                                 </div>
                                                 <div className="flex-grow">
-                                                    <p className={`font-bold text-sm ${state.completedTasks.includes(t.id) ? 'line-through opacity-30 text-slate-400' : ''}`}>{t.title}</p>
+                                                    <p className={`font-bold text-sm ${state.completedTasks.includes(t.id) ? 'line-through opacity-40 text-slate-400' : ''}`}>{t.title}</p>
                                                     <p className="text-[9px] font-bold text-white/40 uppercase tracking-widest mt-1">{t.time} МИН • {t.type}</p>
                                                 </div>
                                             </div>
                                         ))}
                                     </div>
-                                    <div className="absolute -bottom-10 -right-10 w-48 h-48 bg-indigo-500/20 blur-[80px] rounded-full transition-all group-hover:scale-110"></div>
-                                </div>
-
-                                <div className="bg-white p-7 rounded-[2.5rem] border border-slate-100 shadow-sm space-y-4">
-                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Методический фокус</p>
-                                    <div className="flex gap-4">
-                                        <div className={`flex-1 p-4 rounded-3xl border transition-all ${isDayA ? 'bg-indigo-50 border-indigo-200' : 'bg-slate-50 opacity-50'}`}>
-                                            <p className="text-[9px] font-bold text-indigo-700 uppercase mb-1">День А</p>
-                                            <p className="text-[10px] text-slate-600 leading-tight">Накопление, анализ текста.</p>
-                                        </div>
-                                        <div className={`flex-1 p-4 rounded-3xl border transition-all ${!isDayA ? 'bg-emerald-50 border-emerald-200' : 'bg-slate-50 opacity-50'}`}>
-                                            <p className="text-[9px] font-bold text-emerald-700 uppercase mb-1">День Б</p>
-                                            <p className="text-[10px] text-slate-600 leading-tight">Активация, речь, Shadowing.</p>
-                                        </div>
-                                    </div>
+                                    <div className="absolute -bottom-10 -right-10 w-48 h-48 bg-indigo-500/20 blur-[80px] rounded-full"></div>
                                 </div>
                             </div>
                         )}
 
                         {view === 'map' && (
                             <div className="space-y-4 animate-in">
-                                <h2 className="text-2xl font-black mb-6">Дорожная карта</h2>
+                                <h2 className="text-2xl font-black mb-6 px-1">Дорожная карта</h2>
                                 {PHASES.map(p => (
-                                    <div key={p.id} onClick={() => { if(confirm('Сменить этап вручную?')) { const ns = {...state, currentPhaseId: p.id}; setState(ns); save(ns); setView('home'); } }} className={`p-6 rounded-[2rem] border-2 transition-all cursor-pointer relative ${state.currentPhaseId === p.id ? 'bg-indigo-600 text-white border-indigo-500 shadow-xl scale-[1.02]' : 'bg-white border-slate-100 opacity-60'}`}>
+                                    <div key={p.id} onClick={() => { if(confirm('Сменить этап вручную?')) { const ns = {...state, currentPhaseId: p.id, completedTasks: []}; setState(ns); save(ns); setView('home'); } }} className={`p-6 rounded-[2rem] border-2 transition-all cursor-pointer relative ${state.currentPhaseId === p.id ? 'bg-indigo-600 text-white border-indigo-500 shadow-xl' : 'bg-white border-slate-100 opacity-60'}`}>
                                         <div className="flex justify-between items-center mb-2">
-                                            <span className="text-[10px] font-black uppercase tracking-tighter">{p.days} TAGE</span>
+                                            <span className="text-[10px] font-black uppercase">{p.days} дней</span>
                                             <span className="font-black text-xl">{p.level}</span>
                                         </div>
                                         <h3 className="font-black text-lg">{p.name}</h3>
@@ -234,55 +223,24 @@
                             </div>
                         )}
 
-                        {view === 'method' && (
-                            <div className="space-y-6 animate-in">
-                                <h2 className="text-2xl font-black px-1">Гайд C1</h2>
-                                <div className="bg-slate-900 p-8 rounded-[2.5rem] text-white space-y-5 shadow-2xl">
-                                    <h4 className="font-black text-sm uppercase tracking-widest text-indigo-400">ChatGPT Tutor</h4>
-                                    <p className="text-[11px] text-slate-400 leading-relaxed italic">Нажмите кнопку ниже, чтобы скопировать идеальный промпт для настройки ИИ-преподавателя на ваш уровень ({currentPhase.level}).</p>
-                                    <button 
-                                        onClick={copyPrompt}
-                                        className="w-full bg-indigo-600 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 shadow-lg shadow-indigo-600/20"
-                                    >
-                                        {copyStatus ? 'ГОТОВО К ВСТАВКЕ!' : 'СКОПИРОВАТЬ ПРОМПТ'}
-                                    </button>
-                                </div>
-                                <div className="bg-white p-7 rounded-[2.5rem] border border-slate-100 space-y-4 shadow-sm">
-                                    <h4 className="font-black text-indigo-600 uppercase text-[10px] tracking-widest">Anki: Рода (Gender)</h4>
-                                    <div className="flex gap-2">
-                                        <span className="flex-1 p-2 bg-blue-500 rounded-xl text-[8px] font-black text-white text-center">DER (M)</span>
-                                        <span className="flex-1 p-2 bg-red-500 rounded-xl text-[8px] font-black text-white text-center">DIE (F)</span>
-                                        <span className="flex-1 p-2 bg-emerald-500 rounded-xl text-[8px] font-black text-white text-center">DAS (N)</span>
-                                    </div>
-                                    <p className="text-[10px] text-slate-400 leading-relaxed">Настройте стили CSS в Anki, чтобы слова окрашивались автоматически. Учите слова <strong>только</strong> с артиклем.</p>
-                                </div>
-                            </div>
-                        )}
-
                         {view === 'settings' && (
                           <div className="space-y-6 animate-in">
-                              <h2 className="text-2xl font-black px-1">Настройки</h2>
-                              <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm space-y-4 text-center">
-                                  <div className="p-4 bg-indigo-50 rounded-3xl border border-indigo-100 mb-2">
-                                      <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Cloud Sync</p>
-                                      <p className="text-[11px] text-slate-500 mt-1">{user?.isAnonymous ? 'Данные сохраняются локально. Войдите для облачного бекапа.' : 'Все данные синхронизированы с Google.'}</p>
-                                  </div>
-                                  <button onClick={() => window.open(`https://www.google.com/calendar/render?action=TEMPLATE&text=DeutschMeister%2040min&recur=RRULE:FREQ=DAILY`, '_blank')} className="w-full flex items-center justify-between p-4 bg-slate-900 rounded-2xl text-white font-bold text-[10px] uppercase tracking-widest transition-all active:scale-95">
+                              <h2 className="text-2xl font-black px-1">Опции</h2>
+                              <div className="bg-white p-7 rounded-[2.5rem] border border-slate-100 shadow-sm space-y-4 text-center">
+                                  <button onClick={() => window.open(`https://www.google.com/calendar/render?action=TEMPLATE&text=DeutschMeister%2040min&recur=RRULE:FREQ=DAILY`, '_blank')} className="w-full flex items-center justify-between p-4 bg-slate-900 rounded-2xl text-white font-bold text-[10px] uppercase tracking-widest transition-all btn-active">
                                       <span>Google Calendar Sync</span>
                                       <span>📅</span>
                                   </button>
-                                  <button onClick={() => { if(confirm('Сбросить весь прогресс? Это необратимо.')) { const ns = { ...state, startDate: new Date().toISOString(), currentPhaseId: 0, streak: 0, completedTasks: [] }; setState(ns); save(ns); } }} className="w-full p-4 text-center text-rose-500 font-bold text-[10px] uppercase tracking-widest bg-rose-50 rounded-2xl border border-rose-100 transition-all active:scale-95">Сбросить обучение</button>
+                                  <button onClick={() => { if(confirm('Сбросить весь прогресс? Это обнулит дату старта.')) { const ns = { ...state, startDate: new Date().toISOString(), currentPhaseId: 0, streak: 0, completedTasks: [] }; setState(ns); save(ns); } }} className="w-full p-4 text-center text-rose-500 font-bold text-[10px] uppercase tracking-widest bg-rose-50 rounded-2xl border border-rose-100 btn-active">Сбросить обучение</button>
                               </div>
                           </div>
                         )}
                     </main>
 
-                    {/* BOTTOM NAV */}
                     <nav className="fixed bottom-0 left-0 right-0 glass border-t border-slate-100 px-8 pb-10 pt-4 z-50 rounded-t-[2.5rem]">
-                        <div className="max-w-md mx-auto flex justify-between items-center">
+                        <div className="max-w-md mx-auto flex justify-around">
                             <button onClick={() => setView('home')} className={`flex flex-col items-center gap-1 transition-all ${view === 'home' ? 'text-indigo-600 scale-110' : 'text-slate-400 opacity-50'}`}><span className="text-xl">⚡</span><span className="text-[8px] font-black uppercase">План</span></button>
                             <button onClick={() => setView('map')} className={`flex flex-col items-center gap-1 transition-all ${view === 'map' ? 'text-indigo-600 scale-110' : 'text-slate-400 opacity-50'}`}><span className="text-xl">🗺️</span><span className="text-[8px] font-black uppercase">Карта</span></button>
-                            <button onClick={() => setView('guide')} className={`flex flex-col items-center gap-1 transition-all ${view === 'guide' ? 'text-indigo-600 scale-110' : 'text-slate-400 opacity-50'}`}><span className="text-xl">📖</span><span className="text-[8px] font-black uppercase">Метод</span></button>
                             <button onClick={() => setView('settings')} className={`flex flex-col items-center gap-1 transition-all ${view === 'settings' ? 'text-indigo-600 scale-110' : 'text-slate-400 opacity-50'}`}><span className="text-xl">⚙️</span><span className="text-[8px] font-black uppercase">Опции</span></button>
                         </div>
                     </nav>
