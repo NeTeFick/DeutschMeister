@@ -27,7 +27,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyBRAeIilgqixdDrBQFThpx00D2Te0gPuY0",
@@ -47,13 +47,13 @@
 
         window.API = { 
             auth, db, provider, signInWithPopup, signOut, 
-            onAuthStateChanged, signInAnonymously, doc, setDoc, onSnapshot, getDoc
+            onAuthStateChanged, signInAnonymously, doc, setDoc, onSnapshot 
         };
     </script>
 
     <!-- REACT APP -->
     <script type="text/babel">
-        const { useState, useEffect, useMemo, useCallback } = React;
+        const { useState, useEffect, useMemo, useCallback, useRef } = React;
 
         const PHASES = [
             { id: 0, level: 'A1', name: 'Закладка фундамента', days: 90, res: 'Nicos Weg A1', tasksA: [{id:'a1_1', title:'Nicos Weg: Анализ', time:20, type:'Input'}, {id:'a1_2', title:'Anki: Новые карты', time:10, type:'Memory'}, {id:'a1_3', title:'V2 Rule: Синтаксис', time:10, type:'Study'}], tasksB: [{id:'b1_1', title:'Shadowing (NW)', time:15, type:'Output'}, {id:'b1_2', title:'Anki: Повторение', time:15, type:'Memory'}, {id:'b1_3', title:'SST: Монолог', time:10, type:'Output'}] },
@@ -75,68 +75,80 @@
         function App() {
             const [user, setUser] = useState(null);
             const [view, setView] = useState('home');
+            const [isLoaded, setIsLoaded] = useState(false);
             const [copyOk, setCopyOk] = useState(false);
+            
             const [state, setState] = useState({ 
                 currentPhaseId: 0, completedTasks: [], streak: 0, 
                 startDate: new Date().toISOString(), lastActivity: new Date().toDateString(), 
                 history: {}, notificationsEnabled: false, autoAdvance: true
             });
 
+            // Инициализация Auth
             useEffect(() => {
                 const init = setInterval(() => {
                     if (window.API) {
                         clearInterval(init);
-                        window.API.onAuthStateChanged(window.API.auth, (u) => {
-                            if (!u) window.API.signInAnonymously(window.API.auth);
+                        window.API.onAuthStateChanged(window.API.auth, async (u) => {
+                            if (!u) {
+                                await window.API.signInAnonymously(window.API.auth);
+                            }
                             setUser(u);
                         });
                     }
-                }, 50);
+                }, 100);
                 return () => clearInterval(init);
             }, []);
 
+            // Загрузка данных из Firestore
             useEffect(() => {
                 if (!user || !window.API) return;
-                const path = window.API.doc(window.API.db, "artifacts", "deutsch-pro-v13-final", "users", user.uid, "settings", "state");
+                // ВАЖНО: Используем строгий путь из правил
+                const path = window.API.doc(window.API.db, "artifacts", "deutschmeister-489ea", "users", user.uid, "state", "progress");
                 const unsub = window.API.onSnapshot(path, (snap) => {
-                    if (snap.exists()) setState(prev => ({ ...prev, ...snap.data() }));
+                    if (snap.exists()) {
+                        setState(prev => ({ ...prev, ...snap.data() }));
+                    }
+                    setIsLoaded(true); // Данные загружены, можно разрешать сохранение
                 });
                 return () => unsub();
             }, [user]);
 
+            // Сохранение данных
             const save = useCallback(async (ns) => {
-                if (!user || !window.API) return;
-                const path = window.API.doc(window.API.db, "artifacts", "deutsch-pro-v13-final", "users", user.uid, "settings", "state");
+                if (!user || !isLoaded || !window.API) return;
+                const path = window.API.doc(window.API.db, "artifacts", "deutschmeister-489ea", "users", user.uid, "state", "progress");
                 await window.API.setDoc(path, ns);
-            }, [user]);
+            }, [user, isLoaded]);
 
             const daysPassed = useMemo(() => {
                 const diff = new Date() - new Date(state.startDate);
                 return Math.max(0, Math.floor(diff / 86400000));
             }, [state.startDate]);
 
-            // Логика автоматического определения этапа
-            const calculatedPhaseId = useMemo(() => {
-                let cumulativeDays = 0;
-                for (let i = 0; i < PHASES.length; i++) {
-                    cumulativeDays += PHASES[i].days;
-                    if (daysPassed < cumulativeDays) return i;
-                }
-                return PHASES.length - 1;
-            }, [daysPassed]);
-
-            // Автоматический переход
-            useEffect(() => {
-                if (state.autoAdvance && state.currentPhaseId !== calculatedPhaseId) {
-                    const ns = { ...state, currentPhaseId: calculatedPhaseId, completedTasks: [] };
-                    setState(ns);
-                    save(ns);
-                }
-            }, [calculatedPhaseId, state.autoAdvance, state.currentPhaseId, save]);
-
             const isDayA = daysPassed % 2 === 0;
             const currentPhase = PHASES[state.currentPhaseId];
             const tasks = isDayA ? currentPhase.tasksA : currentPhase.tasksB;
+
+            // Логика автоматического перехода
+            useEffect(() => {
+                if (!isLoaded || !state.autoAdvance) return;
+                let cumulativeDays = 0;
+                let targetId = 0;
+                for (let i = 0; i < PHASES.length; i++) {
+                    cumulativeDays += PHASES[i].days;
+                    if (daysPassed < cumulativeDays) {
+                        targetId = i;
+                        break;
+                    }
+                    if (i === PHASES.length - 1) targetId = i;
+                }
+                if (targetId !== state.currentPhaseId) {
+                    const newState = { ...state, currentPhaseId: targetId, completedTasks: [] };
+                    setState(newState);
+                    save(newState);
+                }
+            }, [daysPassed, isLoaded, state.autoAdvance, state.currentPhaseId]);
 
             const toggleTask = (id) => {
                 const isDone = state.completedTasks.includes(id);
@@ -156,7 +168,7 @@
             };
 
             const changePhaseManual = async (pid) => {
-                if (window.confirm("Сменить этап вручную? Это отключит авто-переход до конца дня.")) {
+                if (window.confirm("Сменить этап вручную? Это временно отключит автоматический переход.")) {
                     const newState = { ...state, currentPhaseId: pid, completedTasks: [], autoAdvance: false };
                     setState(newState);
                     await save(newState);
@@ -166,11 +178,15 @@
 
             const toggleNotifications = async () => {
                 if (state.notificationsEnabled) {
-                    save({...state, notificationsEnabled: false});
+                    const ns = {...state, notificationsEnabled: false};
+                    setState(ns);
+                    save(ns);
                 } else {
                     const res = await Notification.requestPermission();
                     if (res === 'granted') {
-                        save({...state, notificationsEnabled: true});
+                        const ns = {...state, notificationsEnabled: true};
+                        setState(ns);
+                        save(ns);
                         new Notification("Meister", { body: "Уведомления включены!" });
                     } else {
                         alert("Разрешите уведомления в настройках браузера.");
@@ -238,7 +254,7 @@
                                         <h3 className="text-2xl font-black mb-6 italic">40 Минут <span className="text-indigo-400 uppercase tracking-tighter">fokus</span></h3>
                                         {tasks.map(t => (
                                             <div key={t.id} onClick={() => toggleTask(t.id)} className="flex items-center gap-4 bg-white/5 p-4 rounded-[1.8rem] border border-white/5 cursor-pointer hover:bg-white/10 transition-all btn-active group">
-                                                <div className={`w-8 h-8 rounded-xl border-2 flex items-center justify-center transition-all ${state.completedTasks.includes(t.id) ? 'bg-indigo-50 border-indigo-50 shadow-lg shadow-indigo-500/50' : 'border-white/20'}`}>
+                                                <div className={`w-8 h-8 rounded-xl border-2 flex items-center justify-center transition-all ${state.completedTasks.includes(t.id) ? 'bg-indigo-500 border-indigo-500 shadow-lg shadow-indigo-500/50' : 'border-white/20'}`}>
                                                     {state.completedTasks.includes(t.id) && <Svg.Check />}
                                                 </div>
                                                 <div className="flex-grow">
@@ -249,10 +265,6 @@
                                         ))}
                                     </div>
                                     <div className="absolute -bottom-10 -right-10 w-48 h-48 bg-indigo-500/10 blur-[80px] rounded-full group-hover:scale-125 transition-all"></div>
-                                </div>
-                                <div className="bg-white p-7 rounded-[2rem] border border-slate-100 shadow-sm space-y-3">
-                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Основной ресурс</p>
-                                    <p className="font-bold text-slate-800 text-sm leading-tight">{currentPhase.res}</p>
                                 </div>
                             </div>
                         )}
@@ -265,7 +277,7 @@
                                         <p className="text-[9px] font-black uppercase opacity-60 mb-2 leading-none">Общее время</p>
                                         <p className="text-2xl font-black">~{((daysPassed * 40) / 60).toFixed(0)} ч.</p>
                                     </div>
-                                    <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
+                                    <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm text-center">
                                         <p className="text-[9px] font-black uppercase text-slate-400 mb-2 leading-none">Выполнено</p>
                                         <p className="text-2xl font-black text-slate-800 tracking-tighter">{totalTasksDone}</p>
                                     </div>
@@ -274,7 +286,8 @@
                                     {[...Array(7)].map((_, i) => {
                                         const d = new Date(); d.setDate(d.getDate() - (6-i));
                                         const ds = d.toISOString().split('T')[0];
-                                        const h = ((state.history[ds] || 0) / 3) * 100;
+                                        const count = state.history[ds] || 0;
+                                        const h = (count / 3) * 100;
                                         return (
                                             <div key={i} className="flex flex-col items-center gap-2">
                                                 <div className="w-5 bg-slate-50 rounded-full h-20 relative overflow-hidden border border-slate-100">
@@ -294,14 +307,12 @@
                                 <div className="bg-indigo-600 p-8 rounded-[2.5rem] text-white shadow-xl relative overflow-hidden">
                                     <h4 className="font-black text-lg mb-4 relative z-10 italic leading-tight">Протокол SST (70/30)</h4>
                                     <p className="text-xs opacity-90 leading-relaxed mb-4 relative z-10 text-indigo-50 italic">Студент говорит 70% времени. Учитель — только корректор. Приходите на урок с уже изученным материалом.</p>
-                                    <div className="bg-white/10 p-4 rounded-2xl relative z-10 border border-white/20 text-center backdrop-blur-sm shadow-sm"><p className="text-[10px] font-black uppercase tracking-widest text-indigo-100 leading-none">Активация центра Брока</p></div>
-                                    <div className="absolute -top-10 -left-10 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
                                 </div>
-                                <div className="bg-white p-7 rounded-[2.5rem] border border-slate-100 space-y-4 shadow-sm">
-                                    <h4 className="font-black text-indigo-600 text-[10px] uppercase tracking-widest">Циклы и Anki</h4>
-                                    <div className="grid grid-cols-2 gap-3 text-left">
-                                        <div className="p-4 bg-indigo-50 rounded-2xl text-[9px] leading-tight text-slate-600"><b>День А:</b> Ввод, анализ, новые слова в Anki. Чтение и письмо.</div>
-                                        <div className="p-4 bg-emerald-50 rounded-2xl text-[9px] leading-tight text-slate-600"><b>День Б:</b> Вывод, Shadowing, пересказ, активация речи.</div>
+                                <div className="bg-white p-7 rounded-[2.5rem] border border-slate-100 space-y-4 shadow-sm text-left">
+                                    <h4 className="font-black text-indigo-600 text-[10px] uppercase tracking-widest text-center">Циклы и Anki</h4>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div className="p-4 bg-indigo-50 rounded-2xl text-[9px] leading-tight text-slate-600"><b>День А:</b> Ввод, анализ, новые слова в Anki.</div>
+                                        <div className="p-4 bg-emerald-50 rounded-2xl text-[9px] leading-tight text-slate-600"><b>День Б:</b> Вывод, Shadowing, пересказ.</div>
                                     </div>
                                     <div className="flex gap-2 pt-2">
                                         <div className="flex-1 p-2 bg-blue-500 rounded-xl text-[8px] font-black text-white text-center">DER (СИН)</div>
@@ -309,8 +320,8 @@
                                         <div className="flex-1 p-2 bg-emerald-500 rounded-xl text-[8px] font-black text-white text-center">DAS (ЗЕЛ)</div>
                                     </div>
                                 </div>
-                                <div className="bg-slate-900 p-8 rounded-[2.5rem] text-white space-y-4 shadow-2xl relative overflow-hidden group">
-                                    <h4 className="font-black text-indigo-400 text-[10px] uppercase tracking-widest text-center">ChatGPT Tutor Prompt</h4>
+                                <div className="bg-slate-900 p-8 rounded-[2.5rem] text-white space-y-4 text-center">
+                                    <h4 className="font-black text-indigo-400 text-[10px] uppercase tracking-widest">ChatGPT Tutor Prompt</h4>
                                     <button onClick={copyPrompt} className="w-full bg-indigo-600 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all btn-active shadow-lg shadow-indigo-600/20">{copyOk ? 'СКОПИРОВАНО!' : 'КОПИРОВАТЬ ПРОМПТ'}</button>
                                 </div>
                             </div>
@@ -318,7 +329,7 @@
 
                         {view === 'map' && (
                             <div className="space-y-4 animate-in">
-                                <h2 className="text-2xl font-black mb-6 px-1 italic leading-tight">Дорожная карта</h2>
+                                <h2 className="text-2xl font-black mb-6 px-1 italic leading-tight text-slate-900">Дорожная карта</h2>
                                 {PHASES.map(p => (
                                     <div key={p.id} onClick={() => changePhaseManual(p.id)} className={`p-6 rounded-[2.5rem] border-2 transition-all cursor-pointer relative ${state.currentPhaseId === p.id ? 'bg-indigo-600 text-white border-indigo-500 shadow-xl scale-[1.02]' : 'bg-white border-slate-100 opacity-60 hover:opacity-100'}`}>
                                         <div className="flex justify-between items-center mb-1">
@@ -327,7 +338,6 @@
                                         </div>
                                         <h3 className="font-black text-lg leading-none">{p.name}</h3>
                                         <p className="text-[11px] opacity-70 mt-1 italic leading-tight">{p.res}</p>
-                                        {state.currentPhaseId === p.id && <div className="absolute top-3 right-3 text-white"><Svg.Check /></div>}
                                     </div>
                                 ))}
                             </div>
@@ -335,28 +345,27 @@
 
                         {view === 'settings' && (
                           <div className="space-y-6 animate-in">
-                              <h2 className="text-2xl font-black px-1 leading-tight italic">Настройки</h2>
+                              <h2 className="text-2xl font-black px-1 leading-tight text-slate-900 italic">Настройки</h2>
                               <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm space-y-6">
                                   <div className="flex items-center justify-between">
                                       <div>
                                           <p className="font-black text-slate-800 text-sm tracking-tight uppercase leading-none">Авто-переход</p>
                                           <p className="text-[10px] text-slate-400 font-bold tracking-wider mt-2 italic">СМЕНА ЭТАПА ПО ДНЯМ</p>
                                       </div>
-                                      <button onClick={() => save({...state, autoAdvance: !state.autoAdvance})} className={`w-14 h-7 rounded-full transition-all relative ${state.autoAdvance ? 'bg-indigo-600 shadow-lg shadow-indigo-200' : 'bg-slate-300'}`}>
+                                      <button onClick={() => { const ns = {...state, autoAdvance: !state.autoAdvance}; setState(ns); save(ns); }} className={`w-14 h-7 rounded-full transition-all relative ${state.autoAdvance ? 'bg-indigo-600 shadow-lg shadow-indigo-200' : 'bg-slate-300'}`}>
                                           <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-transform duration-300 shadow-md ${state.autoAdvance ? 'left-8' : 'left-1'}`}></div>
                                       </button>
                                   </div>
                                   <div className="flex items-center justify-between pt-4 border-t border-slate-50">
                                       <div>
                                           <p className="font-black text-slate-800 text-sm tracking-tight uppercase leading-none">Уведомления</p>
-                                          <p className="text-[10px] text-slate-400 font-bold tracking-wider mt-2 italic text-center">НАПОМИНАТЬ О 40 МИНУТАХ</p>
                                       </div>
                                       <button onClick={toggleNotifications} className={`w-14 h-7 rounded-full transition-all relative ${state.notificationsEnabled ? 'bg-indigo-600 shadow-lg' : 'bg-slate-300'}`}>
                                           <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-transform duration-300 shadow-md ${state.notificationsEnabled ? 'left-8' : 'left-1'}`}></div>
                                       </button>
                                   </div>
                                   <button onClick={() => window.open(`https://www.google.com/calendar/render?action=TEMPLATE&text=DeutschMeister%2040min&recur=RRULE:FREQ=DAILY`, '_blank')} className="w-full flex items-center justify-between p-5 bg-slate-900 rounded-[1.5rem] text-white font-bold text-[10px] uppercase tracking-widest shadow-xl active:scale-95 transition-all"><span>Google Calendar Sync</span><span>📅</span></button>
-                                  <button onClick={() => { if(confirm('Сбросить весь прогресс?')) { save({ ...state, startDate: new Date().toISOString(), currentPhaseId: 0, streak: 0, completedTasks: [], history: {} }); } }} className="w-full p-5 text-center text-rose-500 font-bold text-[10px] uppercase tracking-widest bg-rose-50 rounded-[1.5rem] border border-rose-100 btn-active transition-all">Сбросить обучение</button>
+                                  <button onClick={() => { if(confirm('Сбросить весь прогресс?')) { const ns = { ...state, startDate: new Date().toISOString(), currentPhaseId: 0, streak: 0, completedTasks: [], history: {} }; setState(ns); save(ns); } }} className="w-full p-5 text-center text-rose-500 font-bold text-[10px] uppercase tracking-widest bg-rose-50 rounded-[1.5rem] border border-rose-100 btn-active transition-all">Сбросить обучение</button>
                               </div>
                           </div>
                         )}
