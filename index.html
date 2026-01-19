@@ -29,16 +29,7 @@
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-        const firebaseConfig = {
-            apiKey: "AIzaSyBRAeIilgqixdDrBQFThpx00D2Te0gPuY0",
-            authDomain: "deutschmeister-489ea.firebaseapp.com",
-            projectId: "deutschmeister-489ea",
-            storageBucket: "deutschmeister-489ea.firebasestorage.app",
-            messagingSenderId: "82755973685",
-            appId: "1:82755973685:web:3413021c19d391107a777c",
-            measurementId: "G-3HD3BYTV1M"
-        };
-
+        const firebaseConfig = JSON.parse(__firebase_config);
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
@@ -55,6 +46,8 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo, useCallback, useRef } = React;
 
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'deutsch-meister-pro-v15';
+
         const PHASES = [
             { id: 0, level: 'A1', name: 'Закладка фундамента', days: 90, res: 'Nicos Weg A1', tasksA: [{id:'a1_1', title:'Nicos Weg: Анализ', time:20, type:'Input'}, {id:'a1_2', title:'Anki: Новые карты', time:10, type:'Memory'}, {id:'a1_3', title:'V2 Rule: Синтаксис', time:10, type:'Study'}], tasksB: [{id:'b1_1', title:'Shadowing (NW)', time:15, type:'Output'}, {id:'b1_2', title:'Anki: Повторение', time:15, type:'Memory'}, {id:'b1_3', title:'SST: Монолог', time:10, type:'Output'}] },
             { id: 1, level: 'A2', name: 'Строительство каркаса', days: 90, res: 'Nicos Weg A2', tasksA: [{id:'a2_1', title:'Perfekt: Анализ текста', time:20, type:'Input'}, {id:'a2_2', title:'Dino lernt Deutsch', time:15, type:'Input'}, {id:'a2_3', title:'Anki: Новые фразы', time:5, type:'Memory'}], tasksB: [{id:'b2_1', title:'Синтез: Мой вчера', time:20, type:'Output'}, {id:'b2_2', title:'Anki: Сет', time:15, type:'Memory'}, {id:'b2_3', title:'ChatGPT: Проверка', time:5, type:'Output'}] },
@@ -68,7 +61,7 @@
             Chart: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>,
             Book: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>,
             Map: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon><line x1="8" y1="2" x2="8" y2="18"></line><line x1="16" y1="6" x2="16" y2="22"></line></svg>,
-            Gear: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>,
+            Gear: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>,
             Check: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
         };
 
@@ -87,53 +80,47 @@
             const [user, setUser] = useState(null);
             const [view, setView] = useState('home');
             const [state, setState] = useState(INITIAL_STATE);
+            const [dataReady, setDataReady] = useState(false);
             const [copyOk, setCopyOk] = useState(false);
-            const isLoaded = useRef(false);
 
-            // 1. Auth Init
+            // 1. Инициализация Auth
             useEffect(() => {
                 const initAuth = async () => {
-                    const timer = setInterval(() => {
-                        if (window.API) {
-                            clearInterval(timer);
-                            window.API.onAuthStateChanged(window.API.auth, async (u) => {
-                                if (!u) {
-                                    await window.API.signInAnonymously(window.API.auth);
-                                }
-                                setUser(u);
-                            });
-                        }
-                    }, 50);
+                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                        await window.API.signInWithCustomToken(window.API.auth, __initial_auth_token);
+                    } else {
+                        await window.API.signInAnonymously(window.API.auth);
+                    }
                 };
                 initAuth();
+                const unsub = window.API.onAuthStateChanged(window.API.auth, setUser);
+                return () => unsub();
             }, []);
 
-            // 2. Data Listener (Only once user is ready)
+            // 2. Инициализация Данных (Только после Auth)
             useEffect(() => {
-                if (!user || !window.API) return;
-                const appId = typeof __app_id !== 'undefined' ? __app_id : 'deutsch-pro-v13';
+                if (!user) return;
                 const docRef = window.API.doc(window.API.db, 'artifacts', appId, 'users', user.uid, 'state', 'data');
                 
                 const unsub = window.API.onSnapshot(docRef, (snap) => {
                     if (snap.exists()) {
                         setState(snap.data());
                     } else {
-                        // If new user, save initial state
+                        // Если документа нет, создаем его один раз
                         window.API.setDoc(docRef, INITIAL_STATE);
                     }
-                    isLoaded.current = true;
-                }, (err) => console.error("Firestore Error:", err));
+                    setDataReady(true);
+                }, (err) => console.error("Firebase Error:", err));
 
                 return () => unsub();
             }, [user]);
 
-            // 3. Save Logic (Helper)
-            const saveState = useCallback(async (newState) => {
-                if (!user || !isLoaded.current || !window.API) return;
-                const appId = typeof __app_id !== 'undefined' ? __app_id : 'deutsch-pro-v13';
+            // 3. Функция сохранения (Прямая запись)
+            const pushUpdate = useCallback(async (newState) => {
+                if (!user || !dataReady) return;
                 const docRef = window.API.doc(window.API.db, 'artifacts', appId, 'users', user.uid, 'state', 'data');
                 await window.API.setDoc(docRef, newState);
-            }, [user]);
+            }, [user, dataReady]);
 
             const daysPassed = useMemo(() => {
                 const diff = new Date() - new Date(state.startDate);
@@ -144,23 +131,26 @@
             const currentPhase = PHASES[state.currentPhaseId];
             const tasks = isDayA ? currentPhase.tasksA : currentPhase.tasksB;
 
-            // Auto-advance logic
-            const calculatedPhaseId = useMemo(() => {
-                let cumulativeDays = 0;
-                for (let i = 0; i < PHASES.length; i++) {
-                    cumulativeDays += PHASES[i].days;
-                    if (daysPassed < cumulativeDays) return i;
-                }
-                return PHASES.length - 1;
-            }, [daysPassed]);
-
+            // Авто-переход по этапам
             useEffect(() => {
-                if (state.autoAdvance && isLoaded.current && state.currentPhaseId !== calculatedPhaseId) {
-                    const ns = { ...state, currentPhaseId: calculatedPhaseId, completedTasks: [] };
-                    setState(ns);
-                    saveState(ns);
+                if (!dataReady || !state.autoAdvance) return;
+                
+                let cumulative = 0;
+                let targetId = 0;
+                for (let i = 0; i < PHASES.length; i++) {
+                    cumulative += PHASES[i].days;
+                    if (daysPassed < cumulative) {
+                        targetId = i;
+                        break;
+                    }
+                    if (i === PHASES.length - 1) targetId = i;
                 }
-            }, [calculatedPhaseId, state.autoAdvance, state.currentPhaseId, saveState]);
+
+                if (state.currentPhaseId !== targetId) {
+                    const ns = { ...state, currentPhaseId: targetId, completedTasks: [] };
+                    pushUpdate(ns);
+                }
+            }, [daysPassed, dataReady, state.autoAdvance, state.currentPhaseId]);
 
             const toggleTask = (id) => {
                 const isDone = state.completedTasks.includes(id);
@@ -175,30 +165,25 @@
                 newHistory[today] = nt.length;
 
                 const newState = { ...state, completedTasks: nt, lastActivity: todayHuman, streak: ns, history: newHistory };
-                setState(newState);
-                saveState(newState);
+                // Мы не ждем setState, мы пушим в Firebase, onSnapshot обновит UI
+                pushUpdate(newState);
             };
 
-            const handleManualPhase = async (pid) => {
-                if (window.confirm("Сменить этап вручную? Авто-переход будет отключен.")) {
+            const changePhaseManual = (pid) => {
+                if (window.confirm("Сменить этап вручную? Это отключит автоматический переход.")) {
                     const ns = { ...state, currentPhaseId: pid, completedTasks: [], autoAdvance: false };
-                    setState(ns);
-                    await saveState(ns);
+                    pushUpdate(ns);
                     setView('home');
                 }
             };
 
             const toggleNotifications = async () => {
                 if (state.notificationsEnabled) {
-                    const ns = {...state, notificationsEnabled: false};
-                    setState(ns);
-                    saveState(ns);
+                    pushUpdate({...state, notificationsEnabled: false});
                 } else {
                     const res = await Notification.requestPermission();
                     if (res === 'granted') {
-                        const ns = {...state, notificationsEnabled: true};
-                        setState(ns);
-                        saveState(ns);
+                        pushUpdate({...state, notificationsEnabled: true});
                         new Notification("Meister", { body: "Уведомления включены!" });
                     } else {
                         alert("Разрешите уведомления в настройках браузера.");
@@ -212,6 +197,17 @@
                 setCopyOk(true);
                 setTimeout(() => setCopyOk(false), 2000);
             };
+
+            if (!dataReady && user) {
+                return (
+                    <div className="h-screen flex items-center justify-center bg-white">
+                        <div className="flex flex-col items-center gap-4">
+                            <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                            <p className="text-xs font-black text-indigo-600 uppercase tracking-widest">Загрузка данных...</p>
+                        </div>
+                    </div>
+                );
+            }
 
             return (
                 <div className="max-w-md mx-auto min-h-screen bg-[#F8FAFC] flex flex-col pb-28 shadow-xl">
@@ -249,7 +245,7 @@
                                 <div className="flex justify-between items-end">
                                     <div>
                                         <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest leading-none mb-1">{isDayA ? 'Цикл A: Ввод' : 'Цикл B: Вывод'}</p>
-                                        <h2 className="text-2xl font-black text-slate-900 leading-tight text-slate-800">План на сегодня</h2>
+                                        <h2 className="text-2xl font-black text-slate-900 leading-tight">План на сегодня</h2>
                                     </div>
                                     <div className="flex flex-col items-end gap-1">
                                         <span className="text-[10px] font-black text-white bg-indigo-600 px-3 py-1 rounded-full uppercase">{currentPhase.level}</span>
@@ -259,10 +255,10 @@
 
                                 <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white shadow-2xl relative overflow-hidden group">
                                     <div className="relative z-10 space-y-4">
-                                        <h3 className="text-2xl font-black mb-6 italic tracking-tight">40 Минут <span className="text-indigo-400 uppercase tracking-tighter">fokus</span></h3>
+                                        <h3 className="text-2xl font-black mb-6 italic">40 Минут <span className="text-indigo-400 uppercase tracking-tighter">fokus</span></h3>
                                         {tasks.map(t => (
                                             <div key={t.id} onClick={() => toggleTask(t.id)} className="flex items-center gap-4 bg-white/5 p-4 rounded-[1.8rem] border border-white/5 cursor-pointer hover:bg-white/10 transition-all btn-active group">
-                                                <div className={`w-8 h-8 rounded-xl border-2 flex items-center justify-center transition-all ${state.completedTasks.includes(t.id) ? 'bg-indigo-500 border-indigo-500 shadow-lg shadow-indigo-500/50' : 'border-white/20'}`}>
+                                                <div className={`w-8 h-8 rounded-xl border-2 flex items-center justify-center transition-all ${state.completedTasks.includes(t.id) ? 'bg-indigo-500 border-indigo-500 shadow-lg' : 'border-white/20'}`}>
                                                     {state.completedTasks.includes(t.id) && <Svg.Check />}
                                                 </div>
                                                 <div className="flex-grow">
@@ -275,7 +271,7 @@
                                     <div className="absolute -bottom-10 -right-10 w-48 h-48 bg-indigo-500/10 blur-[80px] rounded-full group-hover:scale-125 transition-all"></div>
                                 </div>
                                 <div className="bg-white p-7 rounded-[2rem] border border-slate-100 shadow-sm space-y-3">
-                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Основной ресурс</p>
+                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Основной ресурс</p>
                                     <p className="font-bold text-slate-800 text-sm leading-tight">{currentPhase.res}</p>
                                 </div>
                             </div>
@@ -289,10 +285,10 @@
                                         <p className="text-[9px] font-black uppercase opacity-60 mb-2 leading-none">Общее время</p>
                                         <p className="text-2xl font-black">~{((daysPassed * 40) / 60).toFixed(0)} ч.</p>
                                     </div>
-                                    <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
+                                    <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm text-center">
                                         <p className="text-[9px] font-black uppercase text-slate-400 mb-2 leading-none">Выполнено</p>
                                         <p className="text-2xl font-black text-slate-800 tracking-tighter">
-                                            {Object.values(state.history).reduce((a, b) => a + b, 0)}
+                                            {Object.values(state.history || {}).reduce((a, b) => a + b, 0)}
                                         </p>
                                     </div>
                                 </div>
@@ -300,7 +296,7 @@
                                     {[...Array(7)].map((_, i) => {
                                         const d = new Date(); d.setDate(d.getDate() - (6-i));
                                         const ds = d.toISOString().split('T')[0];
-                                        const h = ((state.history[ds] || 0) / 3) * 100;
+                                        const h = (((state.history || {})[ds] || 0) / 3) * 100;
                                         return (
                                             <div key={i} className="flex flex-col items-center gap-2">
                                                 <div className="w-5 bg-slate-50 rounded-full h-20 relative overflow-hidden border border-slate-100">
@@ -335,7 +331,7 @@
                                         <div className="flex-1 p-2 bg-emerald-500 rounded-xl text-[8px] font-black text-white text-center leading-none">DAS (ЗЕЛ)</div>
                                     </div>
                                 </div>
-                                <div className="bg-slate-900 p-8 rounded-[2.5rem] text-white space-y-4 shadow-2xl relative overflow-hidden group">
+                                <div className="bg-slate-900 p-8 rounded-[2.5rem] text-white space-y-4">
                                     <h4 className="font-black text-indigo-400 text-[10px] uppercase tracking-widest text-center leading-none">ChatGPT Tutor Prompt</h4>
                                     <button onClick={copyPrompt} className="w-full bg-indigo-600 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all btn-active shadow-lg shadow-indigo-600/20">{copyOk ? 'СКОПИРОВАНО!' : 'КОПИРОВАТЬ ПРОМПТ'}</button>
                                 </div>
@@ -346,7 +342,7 @@
                             <div className="space-y-4 animate-in">
                                 <h2 className="text-2xl font-black mb-6 px-1 italic leading-tight text-slate-800">Дорожная карта</h2>
                                 {PHASES.map(p => (
-                                    <div key={p.id} onClick={() => handleManualPhase(p.id)} className={`p-6 rounded-[2.5rem] border-2 transition-all cursor-pointer relative ${state.currentPhaseId === p.id ? 'bg-indigo-600 text-white border-indigo-500 shadow-xl scale-[1.02]' : 'bg-white border-slate-100 opacity-60 hover:opacity-100'}`}>
+                                    <div key={p.id} onClick={() => changePhaseManual(p.id)} className={`p-6 rounded-[2.5rem] border-2 transition-all cursor-pointer relative ${state.currentPhaseId === p.id ? 'bg-indigo-600 text-white border-indigo-500 shadow-xl scale-[1.02]' : 'bg-white border-slate-100 opacity-60 hover:opacity-100'}`}>
                                         <div className="flex justify-between items-center mb-1">
                                             <span className="text-[10px] font-black uppercase tracking-tighter opacity-80">{p.days} дней</span>
                                             <span className="font-black text-xl leading-none">{p.level}</span>
@@ -370,8 +366,7 @@
                                       </div>
                                       <button onClick={() => {
                                           const ns = {...state, autoAdvance: !state.autoAdvance};
-                                          setState(ns);
-                                          saveState(ns);
+                                          pushUpdate(ns);
                                       }} className={`w-14 h-7 rounded-full transition-all relative ${state.autoAdvance ? 'bg-indigo-600 shadow-lg shadow-indigo-200' : 'bg-slate-300'}`}>
                                           <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-transform duration-300 shadow-md ${state.autoAdvance ? 'left-8' : 'left-1'}`}></div>
                                       </button>
@@ -387,8 +382,7 @@
                                   </div>
                                   <button onClick={() => window.open(`https://www.google.com/calendar/render?action=TEMPLATE&text=DeutschMeister%2040min&recur=RRULE:FREQ=DAILY`, '_blank')} className="w-full flex items-center justify-between p-5 bg-slate-900 rounded-[1.5rem] text-white font-bold text-[10px] uppercase tracking-widest shadow-xl active:scale-95 transition-all leading-none"><span>Google Calendar Sync</span><span>📅</span></button>
                                   <button onClick={() => { if(confirm('Сбросить весь прогресс?')) { 
-                                      setState(INITIAL_STATE);
-                                      saveState(INITIAL_STATE);
+                                      pushUpdate(INITIAL_STATE);
                                   } }} className="w-full p-5 text-center text-rose-500 font-bold text-[10px] uppercase tracking-widest bg-rose-50 rounded-[1.5rem] border border-rose-100 btn-active transition-all leading-none">Сбросить обучение</button>
                               </div>
                           </div>
