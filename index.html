@@ -68,62 +68,61 @@
         const INITIAL_STATE = { 
             currentPhaseId: 0, completedTasks: [], streak: 0, 
             startDate: new Date().toISOString(), lastActivity: new Date().toDateString(), 
-            history: {}, autoAdvance: true 
+            history: {}, autoAdvance: true, lastUpdate: Date.now()
         };
 
         function App() {
             const [user, setUser] = useState(null);
             const [view, setView] = useState('home');
-            const [state, setState] = useState(INITIAL_STATE);
-            const [dataLoaded, setDataLoaded] = useState(false);
             const [copyOk, setCopyOk] = useState(false);
+            
+            // Загружаем из localStorage СРАЗУ
+            const [state, setState] = useState(() => {
+                const local = localStorage.getItem('meister_data_v5');
+                return local ? JSON.parse(local) : INITIAL_STATE;
+            });
 
-            // Инициализация пользователя
+            // 1. Auth Logic
             useEffect(() => {
-                const unsubAuth = window.API.onAuthStateChanged(window.API.auth, (u) => {
-                    if (u) {
-                        setUser(u);
-                    } else {
-                        window.API.signInAnonymously(window.API.auth);
-                    }
+                const unsub = window.API.onAuthStateChanged(window.API.auth, (u) => {
+                    setUser(u);
+                    if (!u) window.API.signInAnonymously(window.API.auth);
                 });
-                return () => unsubAuth();
+                return () => unsub();
             }, []);
 
-            // Инициализация данных
+            // 2. Sync Logic (Cloud -> Local)
             useEffect(() => {
                 if (!user) return;
+                const docRef = window.API.doc(window.API.db, "users_v5", user.uid);
                 
-                // Предохранитель: если через 3 сек данные не загрузились, принудительно открываем
-                const timeout = setTimeout(() => setDataLoaded(true), 3000);
-
-                const docRef = window.API.doc(window.API.db, "users_final", user.uid);
-                const unsubData = window.API.onSnapshot(docRef, (snap) => {
+                const unsub = window.API.onSnapshot(docRef, (snap) => {
                     if (snap.exists()) {
-                        setState(snap.data());
-                    } else {
-                        window.API.setDoc(docRef, INITIAL_STATE);
-                        setState(INITIAL_STATE);
+                        const cloudData = snap.data();
+                        // Берем облачные данные только если они новее локальных
+                        if (!state.lastUpdate || cloudData.lastUpdate > state.lastUpdate) {
+                            setState(cloudData);
+                            localStorage.setItem('meister_data_v5', JSON.stringify(cloudData));
+                        }
                     }
-                    setDataLoaded(true);
-                    clearTimeout(timeout);
-                }, (err) => {
-                    console.error("Firestore error", err);
-                    setDataLoaded(true);
                 });
+                return () => unsub();
+            }, [user, state.lastUpdate]);
 
-                return () => {
-                    unsubData();
-                    clearTimeout(timeout);
-                };
+            // 3. Save Logic (Local + Cloud)
+            const updateState = useCallback(async (newState) => {
+                const updated = { ...newState, lastUpdate: Date.now() };
+                
+                // 1. Мгновенно в UI и Локально
+                setState(updated);
+                localStorage.setItem('meister_data_v5', JSON.stringify(updated));
+
+                // 2. В облако если есть юзер
+                if (user) {
+                    const docRef = window.API.doc(window.API.db, "users_v5", user.uid);
+                    await window.API.setDoc(docRef, updated);
+                }
             }, [user]);
-
-            const pushUpdate = async (newState) => {
-                if (!user) return;
-                setState(newState); // Оптимистичное обновление
-                const docRef = window.API.doc(window.API.db, "users_final", user.uid);
-                await window.API.setDoc(docRef, newState);
-            };
 
             const daysPassed = useMemo(() => {
                 const diff = new Date() - new Date(state.startDate);
@@ -146,25 +145,12 @@
                 const newHistory = { ...state.history };
                 newHistory[today] = nt.length;
 
-                pushUpdate({ ...state, completedTasks: nt, lastActivity: todayHuman, streak: ns, history: newHistory });
+                updateState({ ...state, completedTasks: nt, lastActivity: todayHuman, streak: ns, history: newHistory });
             };
-
-            const login = async () => {
-                try {
-                    await window.API.signInWithPopup(window.API.auth, window.API.provider);
-                } catch (e) { alert("Ошибка входа"); }
-            };
-
-            if (!dataLoaded) return (
-                <div className="h-screen flex flex-col items-center justify-center bg-white gap-4">
-                    <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-                    <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest italic">Laden...</p>
-                </div>
-            );
 
             return (
                 <div className="max-w-md mx-auto min-h-screen bg-[#F8FAFC] flex flex-col pb-28 shadow-xl">
-                    <header className="bg-white p-5 flex justify-between items-center sticky top-0 z-50 border-b border-slate-100 shadow-sm">
+                    <header className="bg-white p-5 flex justify-between items-center sticky top-0 z-50 border-b border-slate-100">
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg text-white"><Svg.Zap /></div>
                             <div>
@@ -176,7 +162,7 @@
                             {user && !user.isAnonymous ? (
                                 <img src={user.photoURL} className="w-9 h-9 rounded-full border-2 border-indigo-100 shadow-sm" />
                             ) : (
-                                <button onClick={login} className="bg-indigo-600 text-white text-[10px] px-4 py-2 rounded-xl font-bold shadow-md btn-active">ВОЙТИ</button>
+                                <button onClick={() => window.API.signInWithPopup(window.API.auth, window.API.provider)} className="bg-indigo-600 text-white text-[10px] px-4 py-2 rounded-xl font-bold shadow-md btn-active">ВОЙТИ</button>
                             )}
                         </div>
                     </header>
@@ -191,7 +177,7 @@
                                     </div>
                                     <div className="flex flex-col items-end gap-1">
                                         <span className="text-[10px] font-black text-white bg-indigo-600 px-3 py-1 rounded-full uppercase">{currentPhase.level}</span>
-                                        <span className="text-[10px] text-orange-500 font-black">🔥 Стрик: {state.streak}</span>
+                                        <span className="text-[10px] text-orange-500 font-black tracking-widest uppercase">🔥 Стрик: {state.streak}</span>
                                     </div>
                                 </div>
 
@@ -212,7 +198,7 @@
                                     </div>
                                     <div className="absolute -bottom-10 -right-10 w-48 h-48 bg-indigo-500/10 blur-[80px] rounded-full group-hover:scale-125 transition-all"></div>
                                 </div>
-                                <div className="bg-white p-7 rounded-[2rem] border border-slate-100 shadow-sm space-y-2">
+                                <div className="bg-white p-7 rounded-[2rem] border border-slate-100 shadow-sm">
                                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Основной ресурс</p>
                                     <p className="font-bold text-slate-800 text-sm leading-tight">{currentPhase.res}</p>
                                 </div>
@@ -278,7 +264,7 @@
                             <div className="space-y-4 animate-in">
                                 <h2 className="text-2xl font-black mb-6 text-slate-800 italic tracking-tight">Дорожная карта</h2>
                                 {PHASES.map(p => (
-                                    <div key={p.id} onClick={() => pushUpdate({...state, currentPhaseId: p.id, completedTasks: []})} className={`p-6 rounded-[2.5rem] border-2 transition-all cursor-pointer relative ${state.currentPhaseId === p.id ? 'bg-indigo-600 text-white border-indigo-500 shadow-xl scale-[1.02]' : 'bg-white border-slate-100 opacity-60 hover:opacity-100'}`}>
+                                    <div key={p.id} onClick={() => updateState({...state, currentPhaseId: p.id, completedTasks: []})} className={`p-6 rounded-[2.5rem] border-2 transition-all cursor-pointer relative ${state.currentPhaseId === p.id ? 'bg-indigo-600 text-white border-indigo-500 shadow-xl scale-[1.02]' : 'bg-white border-slate-100 opacity-60 hover:opacity-100'}`}>
                                         <div className="flex justify-between items-center mb-1">
                                             <span className="text-[10px] font-black uppercase opacity-80">{p.days} дней</span>
                                             <span className="font-black text-xl leading-none">{p.level}</span>
@@ -300,7 +286,7 @@
                                           <p className="font-black text-slate-800 text-sm uppercase leading-none">Авто-переход</p>
                                           <p className="text-[10px] text-slate-400 font-bold mt-2 italic leading-none uppercase">по дням</p>
                                       </div>
-                                      <button onClick={() => pushUpdate({...state, autoAdvance: !state.autoAdvance})} className={`w-14 h-7 rounded-full transition-all relative ${state.autoAdvance ? 'bg-indigo-600 shadow-lg' : 'bg-slate-300'}`}>
+                                      <button onClick={() => updateState({...state, autoAdvance: !state.autoAdvance})} className={`w-14 h-7 rounded-full transition-all relative ${state.autoAdvance ? 'bg-indigo-600 shadow-lg' : 'bg-slate-300'}`}>
                                           <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-all ${state.autoAdvance ? 'left-8' : 'left-1'}`}></div>
                                       </button>
                                   </div>
@@ -308,12 +294,12 @@
                                     <button onClick={() => window.open(`https://www.google.com/calendar/render?action=TEMPLATE&text=DeutschMeister%20Training&recur=RRULE:FREQ=DAILY`, '_blank')} className="w-full flex items-center justify-between p-5 bg-slate-900 rounded-[1.5rem] text-white font-bold text-[10px] uppercase tracking-widest shadow-xl btn-active leading-none"><span>Google Calendar</span><span>📅</span></button>
                                     
                                     {user && !user.isAnonymous ? (
-                                        <button onClick={() => window.API.signOut(window.API.auth)} className="w-full p-5 bg-rose-50 text-rose-500 rounded-[1.5rem] font-bold text-[10px] uppercase tracking-widest border border-rose-100 btn-active leading-none">Выйти</button>
+                                        <button onClick={() => window.API.signOut(window.API.auth).then(() => window.location.reload())} className="w-full p-5 bg-rose-50 text-rose-500 rounded-[1.5rem] font-bold text-[10px] uppercase tracking-widest border border-rose-100 btn-active leading-none">Выйти</button>
                                     ) : (
-                                        <button onClick={login} className="w-full p-5 bg-indigo-600 text-white rounded-[1.5rem] font-bold text-[10px] uppercase tracking-widest shadow-xl btn-active leading-none">Войти через Google</button>
+                                        <button onClick={() => window.API.signInWithPopup(window.API.auth, window.API.provider)} className="w-full p-5 bg-indigo-600 text-white rounded-[1.5rem] font-bold text-[10px] uppercase tracking-widest shadow-xl btn-active leading-none">Войти через Google</button>
                                     )}
                                     
-                                    <button onClick={() => { if(confirm('Сбросить всё?')) pushUpdate(INITIAL_STATE); }} className="w-full p-4 text-center text-slate-300 font-bold text-[9px] uppercase tracking-widest hover:text-rose-500 transition-all">Сбросить прогресс</button>
+                                    <button onClick={() => { if(confirm('Сбросить всё?')) updateState(INITIAL_STATE); }} className="w-full p-4 text-center text-slate-300 font-bold text-[9px] uppercase tracking-widest hover:text-rose-500 transition-all">Сбросить прогресс</button>
                                   </div>
                               </div>
                           </div>
