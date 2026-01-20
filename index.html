@@ -68,61 +68,71 @@
         const INITIAL_STATE = { 
             currentPhaseId: 0, completedTasks: [], streak: 0, 
             startDate: new Date().toISOString(), lastActivity: new Date().toDateString(), 
-            history: {}, autoAdvance: true, lastUpdate: Date.now()
+            history: {}, autoAdvance: true, lastUpdate: 0
         };
 
         function App() {
             const [user, setUser] = useState(null);
             const [view, setView] = useState('home');
+            const [isCloudSynced, setIsCloudSynced] = useState(false);
             const [copyOk, setCopyOk] = useState(false);
             
-            // Загружаем из localStorage СРАЗУ
             const [state, setState] = useState(() => {
-                const local = localStorage.getItem('meister_data_v5');
+                const local = localStorage.getItem('meister_v6_data');
                 return local ? JSON.parse(local) : INITIAL_STATE;
             });
 
-            // 1. Auth Logic
+            // 1. Auth & Initial Login
             useEffect(() => {
                 const unsub = window.API.onAuthStateChanged(window.API.auth, (u) => {
                     setUser(u);
-                    if (!u) window.API.signInAnonymously(window.API.auth);
+                    if (!u) window.API.signInAnonymously(window.API.auth).catch(e => console.error("Auth Error:", e));
                 });
-                return () => unsub();
+                return unsub;
             }, []);
 
-            // 2. Sync Logic (Cloud -> Local)
+            // 2. Sync from Cloud
             useEffect(() => {
                 if (!user) return;
                 const docRef = window.API.doc(window.API.db, "users_v5", user.uid);
                 
                 const unsub = window.API.onSnapshot(docRef, (snap) => {
                     if (snap.exists()) {
-                        const cloudData = snap.data();
-                        // Берем облачные данные только если они новее локальных
-                        if (!state.lastUpdate || cloudData.lastUpdate > state.lastUpdate) {
-                            setState(cloudData);
-                            localStorage.setItem('meister_data_v5', JSON.stringify(cloudData));
+                        const cloud = snap.data();
+                        if (cloud.lastUpdate > state.lastUpdate) {
+                            setState(cloud);
+                            localStorage.setItem('meister_v6_data', JSON.stringify(cloud));
                         }
+                        setIsCloudSynced(true);
+                    } else {
+                        // Если в облаке пусто, отправляем туда наши локальные данные
+                        window.API.setDoc(docRef, state);
+                        setIsCloudSynced(true);
                     }
+                }, (err) => {
+                    console.error("Firebase Sync Error (Check Rules!):", err);
+                    setIsCloudSynced(false);
                 });
-                return () => unsub();
-            }, [user, state.lastUpdate]);
-
-            // 3. Save Logic (Local + Cloud)
-            const updateState = useCallback(async (newState) => {
-                const updated = { ...newState, lastUpdate: Date.now() };
-                
-                // 1. Мгновенно в UI и Локально
-                setState(updated);
-                localStorage.setItem('meister_data_v5', JSON.stringify(updated));
-
-                // 2. В облако если есть юзер
-                if (user) {
-                    const docRef = window.API.doc(window.API.db, "users_v5", user.uid);
-                    await window.API.setDoc(docRef, updated);
-                }
+                return unsub;
             }, [user]);
+
+            // 3. Update Function
+            const updateState = async (newState) => {
+                const updated = { ...newState, lastUpdate: Date.now() };
+                setState(updated);
+                localStorage.setItem('meister_v6_data', JSON.stringify(updated));
+
+                if (user) {
+                    try {
+                        const docRef = window.API.doc(window.API.db, "users_v5", user.uid);
+                        await window.API.setDoc(docRef, updated);
+                        setIsCloudSynced(true);
+                    } catch (e) {
+                        console.error("Write Error:", e);
+                        setIsCloudSynced(false);
+                    }
+                }
+            };
 
             const daysPassed = useMemo(() => {
                 const diff = new Date() - new Date(state.startDate);
@@ -149,7 +159,7 @@
             };
 
             return (
-                <div className="max-w-md mx-auto min-h-screen bg-[#F8FAFC] flex flex-col pb-28 shadow-xl">
+                <div className="max-w-md mx-auto min-h-screen bg-[#F8FAFC] flex flex-col pb-28 shadow-xl relative">
                     <header className="bg-white p-5 flex justify-between items-center sticky top-0 z-50 border-b border-slate-100">
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg text-white"><Svg.Zap /></div>
@@ -159,10 +169,11 @@
                             </div>
                         </div>
                         <div className="flex items-center gap-3">
+                            <div className={`w-2 h-2 rounded-full ${isCloudSynced ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-amber-400'}`} title={isCloudSynced ? 'Cloud Synced' : 'Local Only'}></div>
                             {user && !user.isAnonymous ? (
                                 <img src={user.photoURL} className="w-9 h-9 rounded-full border-2 border-indigo-100 shadow-sm" />
                             ) : (
-                                <button onClick={() => window.API.signInWithPopup(window.API.auth, window.API.provider)} className="bg-indigo-600 text-white text-[10px] px-4 py-2 rounded-xl font-bold shadow-md btn-active">ВОЙТИ</button>
+                                <button onClick={() => window.API.signInWithPopup(window.API.auth, window.API.provider)} className="bg-indigo-600 text-white text-[10px] px-4 py-2 rounded-xl font-bold shadow-md btn-active leading-none">ВОЙТИ</button>
                             )}
                         </div>
                     </header>
@@ -173,7 +184,7 @@
                                 <div className="flex justify-between items-end">
                                     <div>
                                         <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-1">{isDayA ? 'Цикл A: Ввод' : 'Цикл B: Вывод'}</p>
-                                        <h2 className="text-2xl font-black text-slate-900 leading-tight">План на сегодня</h2>
+                                        <h2 className="text-2xl font-black text-slate-900 leading-tight tracking-tight">План на сегодня</h2>
                                     </div>
                                     <div className="flex flex-col items-end gap-1">
                                         <span className="text-[10px] font-black text-white bg-indigo-600 px-3 py-1 rounded-full uppercase">{currentPhase.level}</span>
@@ -200,7 +211,7 @@
                                 </div>
                                 <div className="bg-white p-7 rounded-[2rem] border border-slate-100 shadow-sm">
                                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Основной ресурс</p>
-                                    <p className="font-bold text-slate-800 text-sm leading-tight">{currentPhase.res}</p>
+                                    <p className="font-bold text-slate-800 text-sm leading-tight italic">{currentPhase.res}</p>
                                 </div>
                             </div>
                         )}
@@ -249,7 +260,7 @@
                                         navigator.clipboard.writeText(p); setCopyOk(true); setTimeout(() => setCopyOk(false), 2000);
                                     }} className="w-full bg-indigo-500 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all btn-active shadow-lg shadow-indigo-600/20 leading-none">{copyOk ? 'СКОПИРОВАНО!' : 'КОПИРОВАТЬ ПРОМПТ'}</button>
                                 </div>
-                                <div className="bg-white p-7 rounded-[2.5rem] border border-slate-100 space-y-4 shadow-sm">
+                                <div className="bg-white p-7 rounded-[2.5rem] border border-slate-100 shadow-sm space-y-4">
                                     <h4 className="font-black text-indigo-600 text-[10px] uppercase tracking-widest leading-none">Цветовой код Anki</h4>
                                     <div className="flex gap-2">
                                         <div className="flex-1 p-3 bg-blue-500 rounded-xl text-[8px] font-black text-white text-center shadow-sm">DER (СИН)</div>
@@ -286,7 +297,7 @@
                                           <p className="font-black text-slate-800 text-sm uppercase leading-none">Авто-переход</p>
                                           <p className="text-[10px] text-slate-400 font-bold mt-2 italic leading-none uppercase">по дням</p>
                                       </div>
-                                      <button onClick={() => updateState({...state, autoAdvance: !state.autoAdvance})} className={`w-14 h-7 rounded-full transition-all relative ${state.autoAdvance ? 'bg-indigo-600 shadow-lg' : 'bg-slate-300'}`}>
+                                      <button onClick={() => updateState({...state, autoAdvance: !state.autoAdvance})} className={`w-14 h-7 rounded-full transition-all relative ${state.autoAdvance ? 'bg-indigo-600 shadow-lg shadow-indigo-200' : 'bg-slate-300'}`}>
                                           <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-all ${state.autoAdvance ? 'left-8' : 'left-1'}`}></div>
                                       </button>
                                   </div>
@@ -299,9 +310,10 @@
                                         <button onClick={() => window.API.signInWithPopup(window.API.auth, window.API.provider)} className="w-full p-5 bg-indigo-600 text-white rounded-[1.5rem] font-bold text-[10px] uppercase tracking-widest shadow-xl btn-active leading-none">Войти через Google</button>
                                     )}
                                     
-                                    <button onClick={() => { if(confirm('Сбросить всё?')) updateState(INITIAL_STATE); }} className="w-full p-4 text-center text-slate-300 font-bold text-[9px] uppercase tracking-widest hover:text-rose-500 transition-all">Сбросить прогресс</button>
+                                    <button onClick={() => { if(confirm('Сбросить всё?')) updateState(INITIAL_STATE); }} className="w-full p-4 text-center text-slate-300 font-bold text-[9px] uppercase tracking-widest hover:text-rose-500 transition-all leading-none">Сбросить прогресс</button>
                                   </div>
                               </div>
+                              <p className="text-[9px] text-center text-slate-300 font-black uppercase tracking-widest">v6.2 Sync Stabilized</p>
                           </div>
                         )}
                     </main>
