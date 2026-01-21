@@ -3,459 +3,562 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>DeutschMeister Pro | Vanilla C1</title>
+    <title>Deutsch C1: 18-Month Pathfinder</title>
     
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    
+    <script src="https://cdn.jsdelivr.net/npm/driver.js@1.0.1/dist/driver.js.iife.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/driver.js@1.0.1/dist/driver.css"/>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap');
-        
-        body { font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; overflow-x: hidden; }
-        .glass { background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(12px); border-top: 1px solid rgba(255,255,255,0.5); }
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        
-        /* Анимации */
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes slideIn { from { transform: translateY(100%); } to { transform: translateY(0); } }
-        @keyframes highlightPulse { 
-            0% { background-color: rgba(250, 204, 21, 0.5); transform: scale(1.02); } 
-            100% { background-color: transparent; transform: scale(1); } 
+        body { background-color: #0f172a; color: #e2e8f0; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+        /* Анимации для геймификации */
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 10px rgba(59, 130, 246, 0.5); }
+            50% { box-shadow: 0 0 20px rgba(59, 130, 246, 0.8); }
         }
+       .heatmap-cell { transition: all 0.2s ease; }
+       .heatmap-cell:hover { transform: scale(1.3); z-index: 10; border: 1px solid white; }
         
-        .animate-in { animation: fadeIn 0.4s ease-out forwards; }
-        .slide-up { animation: slideIn 0.3s ease-out forwards; }
-        .highlight-flash { animation: highlightPulse 1.5s ease-out; }
+        /* Стилизация скроллбара */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #1e293b; }
+        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
         
-        /* Кастомные чекбоксы */
-        .custom-checkbox:checked + div { background-color: #4F46E5; border-color: #4F46E5; }
-        .custom-checkbox:checked + div svg { opacity: 1; }
-        
-        .btn-press:active { transform: scale(0.96); }
+        /* Тема Driver.js */
+       .driver-popover.driverjs-theme {
+            background-color: #1e293b;
+            color: #f1f5f9;
+            border: 1px solid #3b82f6;
+        }
+       .driver-popover.driverjs-theme.driver-popover-title { font-size: 1.1rem; font-weight: bold; }
+       .driver-popover.driverjs-theme.driver-popover-description { font-size: 0.9rem; line-height: 1.5; }
     </style>
 </head>
-<body class="bg-[#F8FAFC] text-slate-800">
+<body>
+    <div id="root"></div>
 
-    <div id="app" class="max-w-md mx-auto min-h-screen bg-[#F8FAFC] flex flex-col pb-28 shadow-2xl relative">
-        
-        <header class="bg-white p-5 flex justify-between items-center sticky top-0 z-40 border-b border-slate-100/50 backdrop-blur-md bg-white/90">
-            <div class="flex items-center gap-3">
-                <div class="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg text-white">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
-                </div>
-                <div>
-                    <h1 class="text-lg font-black tracking-tighter uppercase leading-none italic">Meister</h1>
-                    <p id="header-day" class="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-1">Загрузка...</p>
-                </div>
-            </div>
-            <div class="flex items-center gap-2">
-                <span id="streak-badge" class="text-[10px] bg-orange-100 text-orange-600 px-2 py-1 rounded-full font-black hidden">🔥 0</span>
-                <div class="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
-            </div>
-        </header>
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useMemo, useCallback } = React;
 
-        <main id="main-content" class="p-6 flex-grow overflow-y-auto no-scrollbar relative">
-            </main>
+        // --- A. КОНФИГУРАЦИЯ КУРСА ---
+        const LEVEL_CONFIG = {
+            A1: { startDay: 1, endDay: 90, title: "Фундамент (A1)", focus: "Фонетика, Базовый словарь, V2", resource: "Nicos Weg A1 + Dino lernt Deutsch" },
+            A2: { startDay: 91, endDay: 180, title: "Нарратив (A2)", focus: "Прошедшее время (Perfekt), Модальные глаголы", resource: "Nicos Weg A2" },
+            B1: { startDay: 181, endDay: 330, title: "Порог (B1)", focus: "Сложные предложения, Аргументация", resource: "Nicos Weg B1 + Easy German Podcast" },
+            B2: { startDay: 331, endDay: 450, title: "Иммерсия (B2)", focus: "Нативный контент, Дебаты, Нюансы", resource: "Романы (Tschick), Сериалы" },
+            C1: { startDay: 451, endDay: 547, title: "Мастерство (C1)", focus: "Номинальный стиль, Академическое письмо", resource: "Aspekte Neu C1 + Spiegel" }
+        };
 
-        <nav class="fixed bottom-0 left-0 right-0 glass pb-8 pt-4 z-50 rounded-t-[2.5rem] shadow-[0_-10px_40px_rgba(0,0,0,0.05)]">
-            <div class="max-w-md mx-auto flex justify-between items-center px-8">
-                <button onclick="router('home')" id="nav-home" class="nav-btn flex flex-col items-center gap-1 transition-all text-indigo-600 scale-110"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg><span class="text-[9px] font-black uppercase tracking-tighter">План</span></button>
-                <button onclick="router('stats')" id="nav-stats" class="nav-btn flex flex-col items-center gap-1 transition-all opacity-40 hover:opacity-100"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg><span class="text-[9px] font-black uppercase tracking-tighter">Статс</span></button>
-                <button onclick="router('method')" id="nav-method" class="nav-btn flex flex-col items-center gap-1 transition-all opacity-40 hover:opacity-100"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg><span class="text-[9px] font-black uppercase tracking-tighter">Метод</span></button>
-                <button onclick="router('map')" id="nav-map" class="nav-btn flex flex-col items-center gap-1 transition-all opacity-40 hover:opacity-100"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon><line x1="8" y1="2" x2="8" y2="18"></line><line x1="16" y1="6" x2="16" y2="22"></line></svg><span class="text-[9px] font-black uppercase tracking-tighter">Карта</span></button>
-            </div>
-        </nav>
+        // --- B. ВСПОМОГАТЕЛЬНЫЕ КОМПОНЕНТЫ ---
 
-        <div id="toast" class="fixed top-24 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-6 py-3 rounded-full shadow-2xl z-[60] flex items-center gap-3 transition-all duration-300 opacity-0 translate-y-[-20px] pointer-events-none">
-            <span class="text-xl">🎉</span>
-            <div>
-                <p class="text-xs font-bold leading-none">Отличная работа!</p>
-                <p class="text-[10px] opacity-70 uppercase tracking-widest mt-1">День засчитан</p>
-            </div>
-        </div>
+        // Иконки (обертка над Lucide для React)
+        const Icon = ({ name, size = 20, color = "currentColor", className="" }) => {
+            useEffect(() => {
+                lucide.createIcons();
+            }, [name]);
+            return <i data-lucide={name} width={size} height={size} stroke={color} className={className}></i>;
+        };
 
-        <div id="onboarding-modal" class="fixed inset-0 z-[70] hidden">
-            <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="closeOnboarding()"></div>
-            <div class="absolute bottom-0 left-0 right-0 bg-white rounded-t-[2.5rem] p-8 pb-12 slide-up max-w-md mx-auto">
-                <div class="w-12 h-1 bg-slate-200 rounded-full mx-auto mb-6"></div>
-                <h2 class="text-2xl font-black text-slate-900 mb-4 tracking-tight">Добро пожаловать в <span class="text-indigo-600">DeutschMeister!</span> 🇩🇪</h2>
-                <div class="space-y-4 text-sm text-slate-600 leading-relaxed mb-8 h-64 overflow-y-auto no-scrollbar">
-                    <p class="font-medium">Это не просто сайт, это ваша карта на ближайшие 1.5 года. Чтобы достичь C1, не нужна магия — нужна система.</p>
+        // Компонент: Аудио Рекордер (для Дня Б)
+        const AudioRecorder = () => {
+            const = useState(false);
+            const = useState("");
+            const = useState(0);
+            const mediaRecorderRef = useRef(null);
+            const chunksRef = useRef();
+            const timerRef = useRef(null);
+
+            const startRecording = async () => {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    mediaRecorderRef.current = new MediaRecorder(stream);
+                    chunksRef.current =;
                     
-                    <div class="bg-slate-50 p-4 rounded-xl space-y-2">
-                        <p><strong>1. Выберите фазу:</strong> Перейдите на вкладку "Карта" и выберите свой уровень.</p>
-                        <p><strong>2. Изучите "Что делать":</strong> Нажмите ℹ️ рядом с задачей, чтобы понять методику.</p>
-                        <p><strong>3. Соблюдайте режим:</strong> Всего 40 минут. Ежедневно.</p>
-                        <p><strong>4. Закрывайте дни:</strong> Ваша цель — закрашивать дни в календаре зеленым.</p>
-                    </div>
+                    mediaRecorderRef.current.ondataavailable = (e) => {
+                        if (e.data.size > 0) chunksRef.current.push(e.data);
+                    };
+                    
+                    mediaRecorderRef.current.onstop = () => {
+                        const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
+                        const url = URL.createObjectURL(blob);
+                        setAudioURL(url);
+                    };
 
-                    <p class="text-xs uppercase font-bold text-rose-500 tracking-widest">⚠️ Пропуск одного дня отбрасывает вас на два назад.</p>
-                </div>
-                <button onclick="closeOnboarding()" class="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest shadow-xl shadow-indigo-500/30 btn-press">Начать путь</button>
-            </div>
-        </div>
-
-    </div>
-
-    <script>
-        // --- DATA & CONFIG ---
-        const PHASES = [
-            { id: 0, level: 'A1', name: 'Закладка фундамента', days: 90, res: 'Nicos Weg A1', url: 'https://learngerman.dw.com/de/nicos-weg/c-36519687', tasksA: [{id:'a1_1', title:'Nicos Weg: Анализ', time:20, type:'Input', method:'input_analysis'}, {id:'a1_2', title:'Anki: Новые карты', time:10, type:'Memory', method:'anki_new'}, {id:'a1_3', title:'V2 Rule: Синтаксис', time:10, type:'Study', method:'grammar_v2'}], tasksB: [{id:'b1_1', title:'Shadowing (NW)', time:15, type:'Output', method:'shadowing'}, {id:'b1_2', title:'Anki: Повторение', time:15, type:'Memory', method:'anki_review'}, {id:'b1_3', title:'SST: Монолог', time:10, type:'Output', method:'sst'}] },
-            { id: 1, level: 'A2', name: 'Строительство каркаса', days: 90, res: 'Nicos Weg A2', url: 'https://learngerman.dw.com/de/nicos-weg/c-36519709', tasksA: [{id:'a2_1', title:'Perfekt: Анализ текста', time:20, type:'Input', method:'input_analysis'}, {id:'a2_2', title:'Dino lernt Deutsch', time:15, type:'Input', method:'reading'}, {id:'a2_3', title:'Anki: Новые фразы', time:5, type:'Memory', method:'anki_new'}], tasksB: [{id:'b2_1', title:'Синтез: Мой вчера', time:20, type:'Output', method:'writing'}, {id:'b2_2', title:'Anki: Сет', time:15, type:'Memory', method:'anki_review'}, {id:'b2_3', title:'ChatGPT: Проверка', time:5, type:'Output', method:'chatgpt'}] },
-            { id: 2, level: 'B1', name: 'Преодоление порога', days: 150, res: 'Easy German Podcast', url: 'https://www.easygerman.org/podcast', tasksA: [{id:'a3_1', title:'Intensive Reading', time:25, type:'Input', method:'reading'}, {id:'a3_2', title:'Anki: Коллокации', time:10, type:'Memory', method:'anki_new'}, {id:'a3_3', title:'Nebensätze: Анализ', time:5, type:'Study', method:'grammar_adv'}], tasksB: [{id:'b3_1', title:'Аргументация (Weil)', time:20, type:'Output', method:'writing'}, {id:'b3_2', title:'Shadowing: Podcast', time:15, type:'Output', method:'shadowing'}, {id:'b3_3', title:'Anki: Сет', time:5, type:'Memory', method:'anki_review'}] },
-            { id: 3, level: 'B2', name: 'Иммерсия', days: 120, res: 'Роман: Tschick', url: 'https://www.youtube.com/results?search_query=tschick+hörbuch', tasksA: [{id:'a4_1', title:'Tschick: Чтение', time:25, type:'Input', method:'reading'}, {id:'a4_2', title:'B2 Vocabulary Anki', time:10, type:'Memory', method:'anki_new'}, {id:'a4_3', title:'Passiv: Анализ', time:5, type:'Study', method:'grammar_adv'}], tasksB: [{id:'b4_1', title:'Рецензия на главу', time:20, type:'Output', method:'writing'}, {id:'b4_2', title:'Дебаты (ChatGPT)', time:15, type:'Output', method:'chatgpt'}, {id:'b4_3', title:'Anki: Повторение', time:5, type:'Memory', method:'anki_review'}] },
-            { id: 4, level: 'C1', name: 'Мастерство', days: 97, res: 'Die Zeit', url: 'https://www.zeit.de/index', tasksA: [{id:'a5_1', title:'Die Zeit: Анализ', time:25, type:'Input', method:'reading'}, {id:'a5_2', title:'Академический вокаб', time:10, type:'Memory', method:'anki_new'}, {id:'a5_3', title:'TestDaF: Leseverstehen', time:5, type:'Study', method:'test_daf'}], tasksB: [{id:'b5_1', title:'Письмо C1 (Таймер)', time:25, type:'Output', method:'writing'}, {id:'b5_2', title:'Монолог C1', time:10, type:'Output', method:'sst'}, {id:'b5_3', title:'Anki: Финал', time:5, type:'Memory', method:'anki_review'}] }
-        ];
-
-        const METHODOLOGY = {
-            'input_analysis': { title: 'Активный анализ', text: 'Не просто слушайте. Разбирайте каждое предложение. Почему здесь Akkusativ? Какой это глагол? Выписывайте незнакомые слова сразу в Anki.' },
-            'anki_new': { title: 'Anki: Загрузка', text: 'Учите слова только в контексте предложений. Никаких изолированных слов. Карточка должна содержать: Слово, Пример, Аудио.' },
-            'anki_review': { title: 'Anki: Интервалы', text: 'Самая важная часть дня. Не пропускайте. Если карточка "Hard" — нажмите Hard. Будьте честны с алгоритмом.' },
-            'shadowing': { title: 'Shadowing', text: 'Слушайте аудио и повторяйте за диктором с задержкой в 0.5 секунды. Копируйте интонацию, скорость и эмоции.' },
-            'sst': { title: 'SST (Speaking)', text: 'Говорите вслух самому себе или диктофону. Описывайте, что видите вокруг. Используйте новые слова, выученные сегодня.' },
-            'writing': { title: 'Письмо', text: 'Пишите текст на 100-150 слов. Затем скормите его ChatGPT с промптом "Исправь ошибки и объясни грамматику".' },
-            'chatgpt': { title: 'AI Спарринг', text: 'Используйте промпт в разделе "Метод" для симуляции диалога с носителем.' },
-            'reading': { title: 'Экстенсивное чтение', text: 'Читайте без словаря. Понимайте суть из контекста. Останавливайтесь только если потеряли нить повествования.' },
-            'grammar_v2': { title: 'Правило V2', text: 'В немецком глагол ВСЕГДА на втором месте в повествовании. Это железобетонное правило.' }
-        };
-
-        // --- STATE MANAGEMENT ---
-        const INITIAL_STATE = {
-            currentPhaseId: 0,
-            completedTaskIds: [],
-            history: {}, // Format: "YYYY-MM-DD": true/false (full completion)
-            lastVisitDate: new Date().toDateString(),
-            streak: 0,
-            hasSeenOnboarding: false
-        };
-
-        let state = JSON.parse(localStorage.getItem('meister_vanilla_state')) || INITIAL_STATE;
-        let currentView = 'home';
-
-        // --- CORE FUNCTIONS ---
-        function saveState() {
-            localStorage.setItem('meister_vanilla_state', JSON.stringify(state));
-            updateHeader();
-        }
-
-        function updateHeader() {
-            const daysPassed = Math.floor((new Date() - new Date(2025, 0, 1)) / (1000 * 60 * 60 * 24)); // Mock start date logic
-            document.getElementById('header-day').innerText = `День ${state.streak} / Строю`;
-            
-            const badge = document.getElementById('streak-badge');
-            if(state.streak > 0) {
-                badge.innerText = `🔥 ${state.streak}`;
-                badge.classList.remove('hidden');
-            } else {
-                badge.classList.add('hidden');
-            }
-        }
-
-        function checkDateReset() {
-            const today = new Date().toDateString();
-            if (state.lastVisitDate !== today) {
-                // New day!
-                state.completedTaskIds = []; // Reset checkboxes
-                state.lastVisitDate = today;
-                
-                // Check if yesterday was skipped for streak logic
-                const yesterday = new Date();
-                yesterday.setDate(yesterday.getDate() - 1);
-                if (!state.history[yesterday.toDateString()]) {
-                    // Streak broken (simple logic, can be improved)
-                    // state.streak = 0; // Optional: strict mode
+                    mediaRecorderRef.current.start();
+                    setIsRecording(true);
+                    setTimer(0);
+                    timerRef.current = setInterval(() => setTimer(t => t + 1), 1000);
+                } catch (err) {
+                    alert("Ошибка доступа к микрофону. Разрешите доступ в браузере.");
                 }
-                saveState();
-            }
+            };
+
+            const stopRecording = () => {
+                if (mediaRecorderRef.current) {
+                    mediaRecorderRef.current.stop();
+                    mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop()); // Stop stream indicator
+                }
+                setIsRecording(false);
+                clearInterval(timerRef.current);
+            };
+
+            const formatTime = (seconds) => {
+                const mins = Math.floor(seconds / 60);
+                const secs = seconds % 60;
+                return `${mins}:${secs < 10? '0' : ''}${secs}`;
+            };
+
+            return (
+                <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700 mt-4 backdrop-blur-sm" id="sst-recorder">
+                    <div className="flex justify-between items-center mb-3">
+                        <h3 className="text-xs font-bold text-blue-400 uppercase tracking-wider flex items-center gap-2">
+                            <Icon name="mic" size={14} /> Инструмент SST (Record & Compare)
+                        </h3>
+                        {isRecording && <span className="text-red-500 text-xs font-mono animate-pulse">● REC {formatTime(timer)}</span>}
+                    </div>
+                    
+                    <div className="flex gap-3 items-center">
+                        {!isRecording? (
+                            <button onClick={startRecording} className="flex-1 bg-blue-600 hover:bg-blue-500 text-white py-2 rounded-lg text-sm font-medium transition flex justify-center gap-2 items-center">
+                                Начать запись
+                            </button>
+                        ) : (
+                            <button onClick={stopRecording} className="flex-1 bg-red-600 hover:bg-red-500 text-white py-2 rounded-lg text-sm font-medium transition flex justify-center gap-2 items-center">
+                                Стоп
+                            </button>
+                        )}
+                        
+                        {audioURL && (
+                            <a href={audioURL} download={`german-practice-${new Date().toISOString().slice(0,10)}.webm`} className="flex-1 bg-slate-700 hover:bg-slate-600 text-slate-200 py-2 rounded-lg text-sm font-medium transition flex justify-center gap-2 items-center text-center">
+                                <Icon name="download" size={16}/> Скачать
+                            </a>
+                        )}
+                    </div>
+                    {audioURL && <audio src={audioURL} controls className="w-full mt-3 h-8" />}
+                </div>
+            );
+        };
+
+        // Компонент: Генератор CSV для Anki
+        const AnkiGenerator = () => {
+            const = useState("");
+            const = useState("");
+            const [context, setContext] = useState("");
+            const [list, setList] = useState();
+
+            const addCard = () => {
+                if (!word) return;
+                setList([...list, { word, translation, context }]);
+                setWord(""); setTranslation(""); setContext("");
+            };
+
+            const downloadCSV = () => {
+                if (list.length === 0) return alert("Список пуст");
+                let csvContent = "data:text/csv;charset=utf-8,Front,Back,Context\n";
+                list.forEach(row => {
+                    csvContent += `"${row.word}","${row.translation}","${row.context}"\n`;
+                });
+                const encodedUri = encodeURI(csvContent);
+                const link = document.createElement("a");
+                link.setAttribute("href", encodedUri);
+                link.setAttribute("download", `anki_import_${new Date().toISOString().slice(0,10)}.csv`);
+                document.body.appendChild(link);
+                link.click();
+                setList(); // Clear after download
+            };
+
+            return (
+                <div className="mt-4 bg-slate-800/50 p-4 rounded-xl border border-slate-700">
+                    <h3 className="text-xs font-bold text-green-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                        <Icon name="layers" size={14} /> Лексический Майнер (Anki)
+                    </h3>
+                    <div className="grid gap-2">
+                        <input value={word} onChange={e => setWord(e.target.value)} placeholder="Слово + Артикль (der Tisch)" className="bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white focus:border-green-500 outline-none" />
+                        <input value={translation} onChange={e => setTranslation(e.target.value)} placeholder="Перевод" className="bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white outline-none" />
+                        <input value={context} onChange={e => setContext(e.target.value)} placeholder="Контекст (предложение)" className="bg-slate-900 border border-slate-600 rounded p-2 text-sm text-white outline-none" />
+                        <div className="flex gap-2 mt-1">
+                            <button onClick={addCard} className="bg-slate-700 hover:bg-slate-600 text-white px-3 py-1 rounded text-xs flex-1">+ Добавить</button>
+                            {list.length > 0 && (
+                                <button onClick={downloadCSV} className="bg-green-600 hover:bg-green-500 text-white px-3 py-1 rounded text-xs flex-1">
+                                    Скачать CSV ({list.length})
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
         }
 
-        // --- ROUTING & RENDERING ---
-        function router(view) {
-            currentView = view;
-            
-            // Update Nav Icons
-            document.querySelectorAll('.nav-btn').forEach(btn => {
-                btn.classList.add('opacity-40', 'hover:opacity-100');
-                btn.classList.remove('text-indigo-600', 'scale-110');
+        // Компонент: Таймер Pomodoro
+        const Pomodoro = ({ onComplete }) => {
+            const = useState(25 * 60);
+            const [isActive, setIsActive] = useState(false);
+            const [mode, setMode] = useState('focus'); // focus | break
+
+            useEffect(() => {
+                let interval = null;
+                if (isActive && timeLeft > 0) {
+                    interval = setInterval(() => setTimeLeft(timeLeft - 1), 1000);
+                } else if (timeLeft === 0) {
+                    setIsActive(false);
+                    new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg').play();
+                    if (mode === 'focus') {
+                        onComplete(); // Начисляем XP
+                        alert("Фокус закончен! Время перерыва.");
+                        setMode('break');
+                        setTimeLeft(5 * 60);
+                    } else {
+                        alert("Перерыв закончен! За работу.");
+                        setMode('focus');
+                        setTimeLeft(25 * 60);
+                    }
+                }
+                return () => clearInterval(interval);
+            }, [isActive, timeLeft, mode]);
+
+            const minutes = Math.floor(timeLeft / 60);
+            const seconds = timeLeft % 60;
+
+            return (
+                <div className="flex items-center gap-4 bg-slate-900 rounded-lg px-4 py-2 border border-slate-700" id="pomodoro-timer">
+                    <div className="text-xl font-mono font-bold text-white">
+                        {minutes}:{seconds < 10? `0${seconds}` : seconds}
+                    </div>
+                    <button onClick={() => setIsActive(!isActive)} className={`p-2 rounded-full ${isActive? 'bg-yellow-600' : 'bg-green-600'} text-white`}>
+                        <Icon name={isActive? "pause" : "play"} size={16} />
+                    </button>
+                    <button onClick={() => { setIsActive(false); setTimeLeft(25*60); setMode('focus'); }} className="text-slate-500 hover:text-white">
+                        <Icon name="rotate-ccw" size={16} />
+                    </button>
+                </div>
+            );
+        };
+
+        // --- C. ГЛАВНОЕ ПРИЛОЖЕНИЕ ---
+        const App = () => {
+            // -- Состояние --
+            const = useState(() => {
+                const saved = localStorage.getItem('german_c1_app_state');
+                return saved? JSON.parse(saved) : {
+                    startDate: new Date().toISOString(),
+                    lastLogin: new Date().toISOString(),
+                    streak: 0,
+                    xp: 0,
+                    freezes: 1, // 1 бесплатная заморозка при старте
+                    progress: {}, // { "2026-01-21": { completed: true, type: "A", time: 40 } }
+                    onboardingComplete: false
+                };
             });
-            const activeBtn = document.getElementById(`nav-${view}`);
-            if(activeBtn) {
-                activeBtn.classList.remove('opacity-40', 'hover:opacity-100');
-                activeBtn.classList.add('text-indigo-600', 'scale-110');
-            }
 
-            const main = document.getElementById('main-content');
-            main.innerHTML = ''; // Clear content
-
-            if (view === 'home') renderHome(main);
-            if (view === 'stats') renderStats(main);
-            if (view === 'method') renderMethod(main);
-            if (view === 'map') renderMap(main);
-        }
-
-        // --- VIEW: HOME ---
-        function renderHome(container) {
-            const phase = PHASES.find(p => p.id === state.currentPhaseId) || PHASES[0];
-            const isDayA = new Date().getDate() % 2 !== 0; // Odd days = A, Even = B
-            const tasks = isDayA ? phase.tasksA : phase.tasksB;
+            const = useState(false);
             
-            const allDone = tasks.every(t => state.completedTaskIds.includes(t.id));
+            // -- Вычисляемые значения --
+            const today = new Date().toISOString().split('T');
+            const daysSinceStart = Math.max(1, Math.floor((new Date() - new Date(state.startDate)) / (1000 * 60 * 60 * 24)) + 1);
+            
+            // Определение текущего уровня
+            let currentLevelKey = "A1";
+            for (const [key, data] of Object.entries(LEVEL_CONFIG)) {
+                if (daysSinceStart >= data.startDay && daysSinceStart <= data.endDay) {
+                    currentLevelKey = key;
+                    break;
+                }
+            }
+            if (daysSinceStart > 547) currentLevelKey = "C1"; // Post-game
 
-            let html = `
-                <div class="space-y-6 animate-in">
-                    <div class="flex justify-between items-end">
-                        <div>
-                            <p class="text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-1">${isDayA ? 'Цикл A: Ввод' : 'Цикл B: Вывод'}</p>
-                            <h2 class="text-2xl font-black text-slate-900 leading-tight tracking-tight">План на сегодня</h2>
+            const levelData = LEVEL_CONFIG[currentLevelKey];
+            const isDayA = daysSinceStart % 2!== 0; // Нечетные дни - А (Ввод), Четные - Б (Вывод)
+            const isCompletedToday =!!state.progress[today];
+
+            // -- Эффекты --
+            
+            // Сохранение
+            useEffect(() => {
+                localStorage.setItem('german_c1_app_state', JSON.stringify(state));
+            }, [state]);
+
+            // Онбординг (Driver.js)
+            useEffect(() => {
+                // Инициализация иконок
+                lucide.createIcons();
+
+                if (!state.onboardingComplete) {
+                    const driver = window.driver.js.driver({
+                        showProgress: true,
+                        steps: [
+                            { element: '#header-stats', popover: { title: 'Ваш Прогресс', description: 'Здесь отображается уровень, XP и текущий стрик. Ваша цель — C1.' } },
+                            { element: '#daily-card', popover: { title: 'Карточка Дня', description: 'Ваше задание на сегодня. День А (Ввод) или День Б (Вывод). Система сама чередует их.' } },
+                            { element: '#method-link', popover: { title: 'Кнопка "МЕТОД"', description: 'Самое важное! Нажмите здесь, чтобы получить пошаговую инструкцию именно для вашего уровня.' } },
+                            { element: '#pomodoro-timer', popover: { title: 'Фокус-Таймер', description: 'Используйте таймер для 40-минутных сессий.' } },
+                            { element: '#heatmap-container', popover: { title: 'Карта Активности', description: 'Закрашивайте квадраты каждый день. Зеленый цвет — ваша дисциплина.' } }
+                        ],
+                        onDestroyStarted: () => {
+                            setState(s => ({...s, onboardingComplete: true}));
+                            confetti({ particleCount: 150, spread: 60 });
+                        }
+                    });
+                    setTimeout(() => driver.drive(), 1000); // Задержка для рендеринга
+                }
+            },);
+
+            // Логика Стрика (проверка при загрузке)
+            useEffect(() => {
+                const lastLoginDate = state.lastLogin.split('T');
+                if (lastLoginDate!== today) {
+                    const diffDays = Math.floor((new Date(today) - new Date(lastLoginDate)) / (1000 * 60 * 60 * 24));
+                    if (diffDays > 1) {
+                        // Пропуск дня!
+                        if (state.freezes > 0) {
+                            // Использовать заморозку
+                            setState(s => ({
+                               ...s, 
+                                freezes: s.freezes - 1, 
+                                lastLogin: new Date().toISOString()
+                            }));
+                            alert(`Стрик спасен! Использована заморозка. Осталось: ${state.freezes - 1}`);
+                        } else {
+                            // Сброс стрика
+                            setState(s => ({...s, streak: 0, lastLogin: new Date().toISOString()}));
+                        }
+                    } else {
+                        // Просто новый день, стрик пока не меняем (меняем при выполнении задачи)
+                        setState(s => ({...s, lastLogin: new Date().toISOString()}));
+                    }
+                }
+            },);
+
+            // -- Обработчики --
+
+            const handleComplete = () => {
+                if (isCompletedToday) return;
+                
+                const xpGain = 100 + (state.streak * 5); // Бонус за стрик
+                const newStreak = state.streak + 1;
+                
+                // Каждые 7 дней даем заморозку
+                const newFreezes = newStreak % 7 === 0? state.freezes + 1 : state.freezes;
+
+                setState(prev => ({
+                   ...prev,
+                    xp: prev.xp + xpGain,
+                    streak: newStreak,
+                    freezes: newFreezes,
+                    progress: {
+                       ...prev.progress,
+                        [today]: { completed: true, type: isDayA? 'A' : 'B', xp: xpGain }
+                    }
+                }));
+
+                confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+            };
+
+            const handleBackup = () => {
+                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state));
+                const downloadAnchorNode = document.createElement('a');
+                downloadAnchorNode.setAttribute("href", dataStr);
+                downloadAnchorNode.setAttribute("download", "german_c1_backup.json");
+                document.body.appendChild(downloadAnchorNode);
+                downloadAnchorNode.click();
+                downloadAnchorNode.remove();
+            };
+
+            // Восстановление из бэкапа
+            const handleRestore = (e) => {
+                const fileReader = new FileReader();
+                fileReader.readAsText(e.target.files, "UTF-8");
+                fileReader.onload = e => {
+                    try {
+                        const parsed = JSON.parse(e.target.result);
+                        if (parsed.startDate && parsed.progress) {
+                            setState(parsed);
+                            alert("Данные успешно восстановлены!");
+                        }
+                    } catch (err) {
+                        alert("Ошибка файла бэкапа.");
+                    }
+                };
+            };
+
+            // -- Рендеринг Вспомогательных Элементов --
+            
+            // Heatmap рендеринг (последние 30 дней для мобильных, 365 для десктопа)
+            const renderHeatmap = () => {
+                const squares =;
+                // Генерируем последние 120 дней
+                for (let i = 119; i >= 0; i--) {
+                    const d = new Date();
+                    d.setDate(d.getDate() - i);
+                    const dStr = d.toISOString().split('T');
+                    const entry = state.progress;
+                    
+                    let bgClass = "bg-slate-800";
+                    if (entry) bgClass = entry.type === 'A'? "bg-blue-500" : "bg-purple-500";
+                    if (dStr === today) bgClass = isCompletedToday? (isDayA? "bg-blue-500" : "bg-purple-500") : "bg-slate-700 animate-pulse";
+
+                    squares.push(
+                        <div key={dStr} title={`${dStr}: ${entry? 'Done' : 'Missed'}`} 
+                             className={`w-3 h-3 rounded-sm ${bgClass} heatmap-cell`}>
                         </div>
-                        <span class="text-[10px] font-black text-white bg-indigo-600 px-3 py-1 rounded-full uppercase shadow-md shadow-indigo-200">${phase.level}</span>
-                    </div>
+                    );
+                }
+                return squares;
+            };
 
-                    <div class="bg-slate-900 rounded-[2.5rem] p-8 text-white shadow-2xl relative overflow-hidden group">
-                        <div class="relative z-10 space-y-5">
-                             <div class="flex justify-between items-center mb-2">
-                                <h3 class="text-2xl font-black italic tracking-tight">40 Минут <span class="text-indigo-400 uppercase tracking-tighter">fokus</span></h3>
-                                ${allDone ? '<span class="text-emerald-400 text-xs font-black uppercase tracking-widest border border-emerald-500/30 px-2 py-1 rounded-lg bg-emerald-500/10">Готово</span>' : ''}
-                             </div>
-                            
-                            ${tasks.map(t => {
-                                const isChecked = state.completedTaskIds.includes(t.id);
-                                return `
-                                <div class="flex items-center gap-4 bg-white/5 p-3 pr-4 rounded-[1.5rem] border border-white/5 transition-all hover:bg-white/10">
-                                    <label class="relative cursor-pointer">
-                                        <input type="checkbox" class="custom-checkbox sr-only" 
-                                            onchange="toggleTask('${t.id}', ${tasks.length})" 
-                                            ${isChecked ? 'checked' : ''}>
-                                        <div class="w-10 h-10 rounded-xl border-2 border-white/20 flex items-center justify-center transition-all hover:border-indigo-400">
-                                            <svg class="w-5 h-5 text-white opacity-0 transition-opacity" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                                        </div>
-                                    </label>
-                                    <div class="flex-grow">
-                                        <p class="font-bold text-sm ${isChecked ? 'line-through opacity-40 text-slate-400' : ''}">${t.title}</p>
-                                        <p class="text-[9px] font-bold text-white/40 uppercase tracking-widest mt-0.5">${t.time} МИН • ${t.type}</p>
-                                    </div>
-                                    <button onclick="goToMethod('${t.method}')" class="w-8 h-8 rounded-full bg-white/5 hover:bg-indigo-500 flex items-center justify-center transition-colors text-white/50 hover:text-white">
-                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
-                                    </button>
+            return (
+                <div className="min-h-screen bg-slate-900 pb-20">
+                    {/* HEADER */}
+                    <header className="bg-slate-800 border-b border-slate-700 sticky top-0 z-20">
+                        <div className="max-w-3xl mx-auto px-4 py-3 flex justify-between items-center" id="header-stats">
+                            <div className="flex items-center gap-3">
+                                <div className="bg-gradient-to-r from-yellow-400 to-red-500 w-10 h-10 rounded-lg flex items-center justify-center font-black text-slate-900 text-xl">
+                                    DE
                                 </div>
-                                `;
-                            }).join('')}
-                        </div>
-                        <div class="absolute -bottom-10 -right-10 w-48 h-48 bg-indigo-500/20 blur-[80px] rounded-full pointer-events-none"></div>
-                    </div>
-
-                    <div class="bg-white p-7 rounded-[2rem] border border-slate-100 shadow-sm">
-                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Активный ресурс</p>
-                        <div class="flex justify-between items-center">
-                            <span class="font-bold text-slate-800">${phase.res}</span>
-                            <button onclick="window.open('${phase.url}', '_blank')" class="text-xs font-black text-indigo-600 uppercase tracking-widest border-b-2 border-indigo-100 hover:border-indigo-600 transition-all pb-1">Открыть →</button>
-                        </div>
-                    </div>
-                </div>
-            `;
-            container.innerHTML = html;
-        }
-
-        // --- VIEW: STATS ---
-        function renderStats(container) {
-            // Generate last 30 days
-            const days = [];
-            for (let i = 29; i >= 0; i--) {
-                const d = new Date();
-                d.setDate(d.getDate() - i);
-                days.push(d.toDateString());
-            }
-
-            const totalDone = Object.keys(state.history).length;
-
-            let html = `
-                <div class="space-y-6 animate-in">
-                    <h2 class="text-2xl font-black text-slate-900 italic tracking-tight uppercase">Дисциплина</h2>
-                    
-                    <div class="grid grid-cols-2 gap-4">
-                        <div class="bg-indigo-600 p-6 rounded-[2rem] text-white shadow-xl relative overflow-hidden">
-                            <p class="text-[9px] font-black uppercase opacity-60 mb-2 leading-none tracking-widest">Дней закрыто</p>
-                            <p class="text-4xl font-black tracking-tighter">${totalDone}</p>
-                            <p class="text-[8px] mt-2 opacity-50 uppercase font-black">из 365 запланированных</p>
-                        </div>
-                         <div class="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm flex flex-col justify-center">
-                            <p class="text-[9px] font-black uppercase text-slate-400 mb-2 leading-none tracking-widest">Текущий стрик</p>
-                            <p class="text-4xl font-black text-slate-800 tracking-tighter">${state.streak} <span class="text-lg text-orange-500">🔥</span></p>
-                        </div>
-                    </div>
-
-                    <div class="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm">
-                         <div class="flex justify-between items-center mb-4">
-                            <h3 class="font-black text-sm text-slate-700 uppercase tracking-wide">Трекер 30 дней</h3>
-                            <div class="flex items-center gap-2 text-[9px] font-bold uppercase text-slate-400">
-                                <span class="block w-3 h-3 bg-emerald-500 rounded"></span> Done
-                                <span class="block w-3 h-3 bg-slate-100 rounded"></span> Skip
+                                <div>
+                                    <h1 className="text-white font-bold leading-none">{currentLevelKey}</h1>
+                                    <div className="text-xs text-slate-400 font-mono">День {daysSinceStart}/547</div>
+                                </div>
+                            </div>
+                            <div className="flex gap-4 text-sm font-medium">
+                                <div className="flex items-center gap-1 text-yellow-400" title="XP Points">
+                                    <Icon name="star" size={16} /> {state.xp}
+                                </div>
+                                <div className="flex items-center gap-1 text-orange-500" title="Streak">
+                                    <Icon name="flame" size={16} /> {state.streak}
+                                </div>
+                                <div className="flex items-center gap-1 text-cyan-400" title="Freezes">
+                                    <Icon name="snowflake" size={16} /> {state.freezes}
+                                </div>
                             </div>
                         </div>
-                        <div class="grid grid-cols-7 gap-2">
-                            ${days.map(dateStr => {
-                                const isDone = state.history[dateStr];
-                                const isToday = dateStr === new Date().toDateString();
-                                const color = isDone ? 'bg-emerald-500 shadow-lg shadow-emerald-500/40' : (isToday ? 'bg-slate-200 animate-pulse' : 'bg-slate-100');
-                                const dayNum = new Date(dateStr).getDate();
-                                return `<div class="aspect-square rounded-lg ${color} flex items-center justify-center text-[10px] font-black text-white/50">${isDone ? '✓' : ''}</div>`;
-                            }).join('')}
+                    </header>
+
+                    <main className="max-w-3xl mx-auto px-4 py-6 flex flex-col gap-6">
+                        
+                        {/* PROGRESS BAR */}
+                        <div className="bg-slate-800 rounded-full h-2 overflow-hidden">
+                            <div className="bg-gradient-to-r from-blue-500 to-purple-500 h-full transition-all duration-1000" style={{width: `${(daysSinceStart/547)*100}%`}}></div>
                         </div>
-                    </div>
-                </div>
-            `;
-            container.innerHTML = html;
-        }
 
-        // --- VIEW: METHOD ---
-        function renderMethod(container) {
-            let html = `
-                <div class="space-y-6 animate-in pb-10">
-                    <h2 class="text-2xl font-black text-slate-900 italic tracking-tight">База знаний</h2>
-                    
-                    <div class="bg-indigo-600 p-8 rounded-[2.5rem] text-white shadow-xl relative overflow-hidden mb-8">
-                        <h4 class="font-black text-lg mb-4 italic leading-tight uppercase tracking-tighter">AI Teacher Prompt</h4>
-                        <p class="text-[11px] opacity-80 mb-6 italic">Скопируй это в ChatGPT для практики.</p>
-                        <button onclick="copyPrompt(this)" class="w-full bg-white text-indigo-600 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg btn-press">Копировать</button>
-                    </div>
-
-                    <div class="space-y-4">
-                        ${Object.entries(METHODOLOGY).map(([key, val]) => `
-                            <div id="method-${key}" class="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm transition-all duration-500">
-                                <p class="text-[9px] font-black text-indigo-500 uppercase tracking-widest mb-2">Метод</p>
-                                <h3 class="text-lg font-black text-slate-800 mb-2">${val.title}</h3>
-                                <p class="text-sm text-slate-600 leading-relaxed">${val.text}</p>
+                        {/* DAILY CARD */}
+                        <div id="daily-card" className={`relative bg-gradient-to-br ${isDayA? 'from-slate-800 to-slate-900 border-blue-900/50' : 'from-slate-800 to-slate-900 border-purple-900/50'} border rounded-2xl p-6 shadow-2xl overflow-hidden`}>
+                            {/* Decorative Background Icon */}
+                            <div className="absolute -right-6 -top-6 opacity-5 pointer-events-none">
+                                <Icon name={isDayA? "book-open" : "mic"} size={200} />
                             </div>
-                        `).join('')}
-                    </div>
-                </div>
-            `;
-            container.innerHTML = html;
-        }
 
-        // --- VIEW: MAP ---
-        function renderMap(container) {
-            let html = `
-                <div class="space-y-4 animate-in">
-                    <h2 class="text-2xl font-black text-slate-800 italic tracking-tight">Дорожная карта</h2>
-                    ${PHASES.map(p => `
-                        <div onclick="selectPhase(${p.id})" class="p-6 rounded-[2.5rem] border-2 transition-all cursor-pointer relative btn-press ${state.currentPhaseId === p.id ? 'bg-indigo-600 text-white border-indigo-500 shadow-xl' : 'bg-white border-slate-100 text-slate-400 hover:border-indigo-200'}">
-                            <div class="flex justify-between items-center mb-1">
-                                <span class="text-[10px] font-black uppercase opacity-80">${p.days} дней</span>
-                                <span class="font-black text-xl leading-none">${p.level}</span>
+                            <div className="relative z-10">
+                                <div className="flex justify-between items-start mb-4">
+                                    <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${isDayA? 'bg-blue-500/20 text-blue-300' : 'bg-purple-500/20 text-purple-300'}`}>
+                                        {isDayA? 'День А: Ввод & Анализ' : 'День Б: Вывод & Синтез'}
+                                    </span>
+                                    <Pomodoro onComplete={() => setState(s => ({...s, xp: s.xp + 50}))} />
+                                </div>
+
+                                <h2 className="text-3xl font-bold text-white mb-2">{levelData.focus}</h2>
+                                <p className="text-slate-400 mb-6 flex items-center gap-2">
+                                    <Icon name="library" size={16} />
+                                    Ресурс: <span className="text-slate-200 underline decoration-dotted">{levelData.resource}</span>
+                                </p>
+
+                                {/* ACTION AREA */}
+                                <div className="bg-black/30 rounded-xl p-4 mb-6 border border-white/5">
+                                    <div className="flex justify-between items-center mb-4">
+                                        <h4 className="font-bold text-slate-300">Инструкции</h4>
+                                        <button 
+                                            id="method-link"
+                                            onClick={() => setShowMethod(true)} 
+                                            className="text-sm text-cyan-400 hover:text-cyan-300 flex items-center gap-1 transition underline decoration-dashed"
+                                        >
+                                            <Icon name="map" size={16} /> Открыть Метод
+                                        </button>
+                                    </div>
+                                    
+                                    {/* Conditional Tools */}
+                                    {isDayA? <AnkiGenerator /> : <AudioRecorder />}
+                                </div>
+
+                                <button 
+                                    onClick={handleComplete} 
+                                    disabled={isCompletedToday}
+                                    className={`w-full py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-2 transition-all transform active:scale-95 ${isCompletedToday? 'bg-green-600/20 text-green-500 border border-green-500/50 cursor-default' : 'bg-white text-slate-900 hover:bg-slate-200 shadow-lg hover:shadow-xl'}`}
+                                >
+                                    {isCompletedToday? <span><Icon name="check" className="inline"/> Задание выполнено</span> : "Отметить выполненным (+100 XP)"}
+                                </button>
                             </div>
-                            <h3 class="font-black text-lg leading-none italic">${p.name}</h3>
-                            ${state.currentPhaseId === p.id ? '<div class="absolute top-6 right-6"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg></div>' : ''}
                         </div>
-                    `).join('')}
+
+                        {/* HEATMAP */}
+                        <div className="bg-slate-800 rounded-xl p-6 border border-slate-700" id="heatmap-container">
+                            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                                <Icon name="calendar" size={16}/> История Активности
+                            </h3>
+                            <div className="flex flex-wrap gap-1 justify-center">
+                                {renderHeatmap()}
+                            </div>
+                        </div>
+
+                        {/* SETTINGS / DATA */}
+                        <div className="flex gap-4 justify-center text-xs text-slate-500 mt-8">
+                            <button onClick={handleBackup} className="hover:text-white transition flex items-center gap-1"><Icon name="save" size={14}/> Скачать бэкап</button>
+                            <label className="hover:text-white transition cursor-pointer flex items-center gap-1">
+                                <Icon name="upload" size={14}/> Восстановить
+                                <input type="file" onChange={handleRestore} className="hidden" accept=".json" />
+                            </label>
+                        </div>
+
+                    </main>
+
+                    {/* METHOD MODAL */}
+                    {showMethod && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={() => setShowMethod(false)}>
+                            <div className="bg-slate-800 rounded-2xl max-w-md w-full p-6 border border-slate-700 shadow-2xl relative" onClick={e => e.stopPropagation()}>
+                                <button onClick={() => setShowMethod(false)} className="absolute top-4 right-4 text-slate-400 hover:text-white"><Icon name="x" /></button>
+                                
+                                <div className="mb-6">
+                                    <span className={`text-xs font-bold px-2 py-1 rounded uppercase ${isDayA? 'bg-blue-500/20 text-blue-300' : 'bg-purple-500/20 text-purple-300'}`}>
+                                        {currentLevelKey} • {isDayA? 'Input' : 'Output'}
+                                    </span>
+                                    <h2 className="text-2xl font-bold text-white mt-2">Пошаговый алгоритм</h2>
+                                </div>
+
+                                <div className="space-y-4">
+                                    {(isDayA? [
+                                        "1. Отключите субтитры. Посмотрите видео/прочитайте текст целиком для общего понимания.",
+                                        "2. Выделите только 7-10 незнакомых слов, которые мешают пониманию смысла.",
+                                        "3. Внесите их в форму 'Лексический Майнер' ниже с контекстом.",
+                                        "4. Разберите ОДНУ грамматическую конструкцию, которая встретилась часто."
+                                    ] :).map((step, i) => (
+                                        <div key={i} className="flex gap-4">
+                                            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center font-bold text-slate-300 border border-slate-600">
+                                                {i+1}
+                                            </div>
+                                            <p className="text-slate-300 text-sm leading-relaxed">{step}</p>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                <div className="mt-6 bg-yellow-500/10 border border-yellow-500/20 p-4 rounded-xl">
+                                    <p className="text-yellow-200 text-xs flex gap-2">
+                                        <Icon name="lightbulb" size={16} className="shrink-0" />
+                                        <span>
+                                            <strong>Совет:</strong> {isDayA? "Не пытайтесь выучить всё. Ваша задача — понять суть и привыкнуть к звучанию." : "Если вы не можете это проговорить, значит вы это не выучили. Говорите громко."}
+                                        </span>
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
-            `;
-            container.innerHTML = html;
-        }
+            );
+        };
 
-        // --- ACTIONS ---
-        
-        function toggleTask(taskId, totalTasks) {
-            if (state.completedTaskIds.includes(taskId)) {
-                state.completedTaskIds = state.completedTaskIds.filter(id => id !== taskId);
-            } else {
-                state.completedTaskIds.push(taskId);
-            }
-            
-            // Re-render only Home to show checkmark state
-            renderHome(document.getElementById('main-content'));
-
-            // Check Daily Completion
-            const tasksToday = document.querySelectorAll('.custom-checkbox').length; 
-            // Note: simple check based on view logic. Better to check against data, but this works for visual feedback.
-            
-            // Logic: Did we finish all tasks for THIS phase/day type?
-            const phase = PHASES.find(p => p.id === state.currentPhaseId);
-            const isDayA = new Date().getDate() % 2 !== 0;
-            const requiredTasks = isDayA ? phase.tasksA : phase.tasksB;
-            
-            const allDone = requiredTasks.every(t => state.completedTaskIds.includes(t.id));
-
-            if (allDone) {
-                const today = new Date().toDateString();
-                if (!state.history[today]) {
-                    state.history[today] = true;
-                    state.streak += 1;
-                    showToast();
-                }
-            } else {
-                // Remove from history if user unchecked something
-                const today = new Date().toDateString();
-                if (state.history[today]) {
-                    delete state.history[today];
-                    state.streak = Math.max(0, state.streak - 1);
-                }
-            }
-            saveState();
-        }
-
-        function selectPhase(id) {
-            state.currentPhaseId = id;
-            state.completedTaskIds = []; // Clear tasks when switching phases? Or keep? Let's clear for cleaner UX.
-            saveState();
-            router('home');
-        }
-
-        function goToMethod(methodKey) {
-            if(!methodKey) return;
-            router('method');
-            setTimeout(() => {
-                const el = document.getElementById(`method-${methodKey}`);
-                if(el) {
-                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    el.classList.add('highlight-flash');
-                    setTimeout(() => el.classList.remove('highlight-flash'), 1500);
-                }
-            }, 100);
-        }
-
-        function showToast() {
-            const toast = document.getElementById('toast');
-            toast.classList.remove('opacity-0', 'translate-y-[-20px]');
-            setTimeout(() => {
-                toast.classList.add('opacity-0', 'translate-y-[-20px]');
-            }, 3000);
-        }
-
-        function copyPrompt(btn) {
-            const p = `Ты профессиональный DaF-преподаватель. Я учу немецкий. Проведи со мной сессию, исправляй ошибки.`;
-            navigator.clipboard.writeText(p);
-            const original = btn.innerText;
-            btn.innerText = 'СКОПИРОВАНО!';
-            btn.classList.add('bg-emerald-500', 'text-white');
-            setTimeout(() => {
-                btn.innerText = original;
-                btn.classList.remove('bg-emerald-500', 'text-white');
-            }, 2000);
-        }
-
-        // --- ONBOARDING ---
-        function checkOnboarding() {
-            if (!state.hasSeenOnboarding) {
-                setTimeout(() => {
-                    document.getElementById('onboarding-modal').classList.remove('hidden');
-                }, 500);
-            }
-        }
-
-        function closeOnboarding() {
-            document.getElementById('onboarding-modal').classList.add('hidden');
-            state.hasSeenOnboarding = true;
-            saveState();
-        }
-
-        // --- INIT ---
-        (function init() {
-            checkDateReset();
-            router('home');
-            updateHeader();
-            checkOnboarding();
-        })();
-
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
     </script>
 </body>
 </html>
