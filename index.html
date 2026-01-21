@@ -3,176 +3,120 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DeutschMeister: Немецкий с 0 до C1 за 1.5 года</title>
+    <title>DeutschMeister: Немецкий с 0 до C1</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
     
-    <!-- Chosen Palette: Warm Neutrals & Academic Blue -->
-    <!-- Primary Background: #FDFBF7 (Warm Paper) -->
-    <!-- Text: #1F2937 (Dark Slate) -->
-    <!-- Accents: #D97706 (Amber/Focus), #3B82F6 (Blue/Structure) -->
-
-    <!-- Application Structure Plan: 
-         1. Hero Section: Sets the goal (C1 in 1.5y) and philosophy.
-         2. Interactive Phase Timeline: The main navigation controller. 
-            - Users select a phase (0-3mo, 3-9mo, etc.).
-            - Updates the "Daily Routine" calculator and "Focus Area".
-         3. Dynamic Dashboard (The Core):
-            - Left Col: Textual Instructions, Methodology for the phase.
-            - Right Col: Data Visualizations (Time Split, Vocab Goals).
-         4. Tools & Environment Setup: Detailed accordion/cards for software setup (Anki, etc.).
-         5. Global Stats: A master view of the full 1.5-year progression curve.
-         This structure moves from "High Level Strategy" to "Daily Tactics" to "Technical Setup".
-    -->
-
-    <!-- Visualization & Content Choices:
-         1. Interactive Timeline: HTML Buttons + JS State. Goal: Show progression logic.
-         2. Daily Routine Split (Doughnut Chart): Chart.js. Goal: Show how the 40 mins are spent differently in each phase (e.g., more grammar early vs more listening late).
-         3. Vocabulary Growth (Line Chart): Chart.js. Goal: Visualize the daunting number of words (5000+) in a manageable curve.
-         4. Tools Grid: HTML/Tailwind Cards. Goal: Clear, actionable links/instructions for setup.
-         NO SVG used. Icons are Unicode.
-    -->
-
-    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
-
     <style>
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #FDFBF7;
-            color: #1F2937;
+        body { font-family: 'Inter', sans-serif; background-color: #FDFBF7; color: #1F2937; }
+        .chart-container { position: relative; width: 100%; height: 300px; }
+        
+        /* Стили для модальных окон и переходов */
+        .modal-backdrop {
+            background-color: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(4px);
         }
         
-        .chart-container {
-            position: relative;
-            width: 100%;
-            max-width: 500px;
-            height: 300px;
-            margin: 0 auto;
-        }
-
-        /* Custom Scrollbar for tools section */
-        .tools-scroll::-webkit-scrollbar {
-            width: 8px;
-        }
-        .tools-scroll::-webkit-scrollbar-track {
-            background: #f1f1f1; 
-        }
-        .tools-scroll::-webkit-scrollbar-thumb {
-            background: #cbd5e1; 
-            border-radius: 4px;
-        }
-        .tools-scroll::-webkit-scrollbar-thumb:hover {
-            background: #94a3b8; 
-        }
-
         .phase-btn.active {
-            background-color: #3B82F6; /* Blue-500 */
-            color: white;
-            border-color: #3B82F6;
+            background-color: #3B82F6; color: white; border-color: #3B82F6; transform: translateY(-2px);
+        }
+
+        /* Checkbox Customization */
+        .custom-checkbox input:checked + div {
+            background-color: #10B981;
+            border-color: #10B981;
+        }
+        .custom-checkbox input:checked + div svg {
+            display: block;
         }
     </style>
 </head>
 <body class="antialiased min-h-screen flex flex-col">
 
-    <!-- Header -->
-    <header class="bg-white border-b border-gray-200 sticky top-0 z-50">
-        <div class="max-w-6xl mx-auto px-4 py-4 flex justify-between items-center">
-            <div class="flex items-center gap-2">
+    <header class="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm">
+        <div class="max-w-6xl mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center gap-3">
                 <span class="text-3xl">🇩🇪</span>
                 <div>
                     <h1 class="text-xl font-bold text-gray-900 tracking-tight">DeutschMeister</h1>
-                    <p class="text-xs text-gray-500 font-medium">Система 0 → C1 (40 мин/день)</p>
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs text-gray-500 font-medium">Система 0 → C1</span>
+                        <span class="bg-orange-100 text-orange-700 text-xs px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+                            🔥 <span id="streak-count">0</span> дн.
+                        </span>
+                    </div>
                 </div>
             </div>
-            <button onclick="scrollToSection('setup')" class="bg-amber-100 text-amber-800 hover:bg-amber-200 px-4 py-2 rounded-lg text-sm font-semibold transition-colors">
-                ⚙️ Настройка среды
+            <button onclick="openOnboarding()" class="text-sm text-blue-600 font-semibold hover:underline">
+                ℹ️ Как это работает?
             </button>
         </div>
     </header>
 
-    <!-- Main Content Wrapper -->
-    <main class="flex-grow max-w-6xl mx-auto px-4 py-8 w-full space-y-12">
+    <main class="flex-grow max-w-6xl mx-auto px-4 py-8 w-full space-y-10">
 
-        <!-- Introduction -->
-        <section class="text-center max-w-3xl mx-auto">
-            <h2 class="text-3xl md:text-4xl font-bold text-gray-800 mb-4">Структурный подход к немецкому</h2>
-            <p class="text-lg text-gray-600 leading-relaxed">
-                Эта интерактивная программа основана на методах эффективного самообучения: интервальных повторениях (SRS) и массивном потреблении контента (Input Hypothesis). 
-                Выберите этап ниже, чтобы увидеть вашу стратегию, расписание и инструменты.
-            </p>
-        </section>
-
-        <!-- Interactive Timeline (Phase Selector) -->
         <section class="bg-white rounded-2xl shadow-sm border border-gray-100 p-2 md:p-4">
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4" id="phase-nav">
-                <!-- Generated by JS -->
-            </div>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4" id="phase-nav"></div>
         </section>
 
-        <!-- Dynamic Dashboard -->
-        <section id="dashboard" class="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-fade-in">
+        <section id="dashboard" class="grid grid-cols-1 lg:grid-cols-12 gap-8">
             
-            <!-- Left Column: Strategy & Tactics (Text) -->
             <div class="lg:col-span-7 space-y-6">
                 
-                <!-- Intro to Phase -->
-                <div class="bg-white rounded-xl p-6 shadow-sm border-l-4 border-blue-500">
-                    <div class="flex justify-between items-start mb-4">
-                        <h3 id="phase-title" class="text-2xl font-bold text-gray-900">Загрузка...</h3>
-                        <span id="phase-duration" class="bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wide">...</span>
+                <div class="bg-white rounded-xl p-6 shadow-sm border-l-4 border-blue-500 relative overflow-hidden">
+                    <div class="absolute top-0 right-0 p-4 opacity-10">
+                        <span class="text-9xl transform translate-x-4 -translate-y-4">🎯</span>
                     </div>
-                    <p id="phase-desc" class="text-gray-700 mb-4 leading-relaxed">
-                        Выберите этап выше.
+                    <div class="relative z-10">
+                        <div class="flex justify-between items-start mb-2">
+                            <h3 id="phase-title" class="text-2xl font-bold text-gray-900">Загрузка...</h3>
+                        </div>
+                        <p id="phase-desc" class="text-gray-600 mb-4 leading-relaxed text-sm"></p>
+                        <div class="bg-blue-50 inline-block px-3 py-1 rounded-lg border border-blue-100">
+                            <span class="text-xs text-blue-800 font-bold uppercase tracking-wide">Главная цель: </span>
+                            <span id="phase-goal" class="text-sm font-semibold text-gray-900 ml-1">...</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl p-6 border border-amber-100 shadow-md">
+                    <div class="flex justify-between items-center mb-4">
+                        <h4 class="text-lg font-bold text-gray-800 flex items-center gap-2">
+                            <span>✅</span> План на сегодня (40 мин)
+                        </h4>
+                        <button id="reset-day-btn" onclick="resetDailyProgress()" class="text-xs text-gray-400 hover:text-red-500 underline hidden">Сбросить день</button>
+                    </div>
+                    
+                    <div id="routine-list" class="space-y-3">
+                        </div>
+
+                    <p class="text-xs text-center text-gray-400 mt-4 italic">
+                        "Регулярность важнее интенсивности. Не ложитесь спать, пока не закроете все галочки."
                     </p>
-                    <div class="flex items-center gap-2 text-sm text-gray-500">
-                        <span>🎯 Цель уровня:</span>
-                        <span id="phase-goal" class="font-semibold text-gray-900">...</span>
-                    </div>
                 </div>
-
-                <!-- Methodology Details -->
-                <div class="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-                    <h4 class="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-                        <span>🧠</span> Методология этапа
-                    </h4>
-                    <ul id="phase-method" class="space-y-3 text-gray-600">
-                        <!-- List items via JS -->
-                    </ul>
-                </div>
-
-                <!-- Daily 40-min Routine Text -->
-                <div class="bg-amber-50 rounded-xl p-6 border border-amber-100">
-                    <h4 class="text-lg font-bold text-amber-900 mb-3 flex items-center gap-2">
-                        <span>⏰</span> Ежедневный план (40 минут)
-                    </h4>
-                    <p class="text-sm text-amber-800 mb-4">
-                        Строгая дисциплина важна. Не пропускайте дни.
-                    </p>
-                    <div id="routine-list" class="space-y-2">
-                        <!-- Routine items via JS -->
-                    </div>
-                </div>
-
             </div>
 
-            <!-- Right Column: Visuals & Metrics -->
             <div class="lg:col-span-5 space-y-6">
                 
-                <!-- Chart: Time Split -->
                 <div class="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-                    <h4 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4 text-center">Распределение времени (мин)</h4>
-                    <div class="chart-container">
-                        <canvas id="routineChart"></canvas>
+                    <h4 class="text-sm font-bold text-gray-700 uppercase mb-3 flex items-center gap-2">
+                        📅 Трекер регулярности
+                    </h4>
+                    <p class="text-xs text-gray-500 mb-4">Закрашивайте дни. Пропуски убивают прогресс.</p>
+                    <div class="flex gap-1 justify-between mb-4" id="week-tracker">
+                        </div>
+                    <div class="bg-gray-50 p-3 rounded-lg border border-gray-200 text-center">
+                         <div class="text-xs text-gray-500 mb-1">Ваш текущий уровень (примерно)</div>
+                         <div id="current-level-display" class="text-2xl font-bold text-blue-600">A0</div>
                     </div>
-                    <p class="text-center text-xs text-gray-400 mt-2">Динамически меняется для каждого этапа</p>
                 </div>
 
-                <!-- Key Metrics Cards -->
                 <div class="grid grid-cols-2 gap-4">
                     <div class="bg-white p-4 rounded-xl border border-gray-100 shadow-sm text-center">
-                        <div class="text-2xl font-bold text-blue-600 mb-1" id="metric-vocab">0</div>
-                        <div class="text-xs text-gray-500">Слов (активных)</div>
+                        <div class="text-2xl font-bold text-gray-800 mb-1" id="metric-vocab">0</div>
+                        <div class="text-xs text-gray-500">Слов (Цель)</div>
                     </div>
                     <div class="bg-white p-4 rounded-xl border border-gray-100 shadow-sm text-center">
                         <div class="text-2xl font-bold text-emerald-600 mb-1" id="metric-hours">0</div>
@@ -180,193 +124,230 @@
                     </div>
                 </div>
 
+                <div class="bg-white rounded-xl p-6 shadow-sm border border-gray-100 h-64">
+                    <canvas id="routineChart"></canvas>
+                </div>
             </div>
         </section>
 
-        <!-- Technical Setup Guide (Static but accordion-like) -->
-        <section id="setup" class="bg-gray-50 rounded-2xl p-6 md:p-8 border border-gray-200">
-            <div class="mb-8">
-                <h3 class="text-2xl font-bold text-gray-900 mb-2">🛠 Инструкция по настройке (Setup)</h3>
-                <p class="text-gray-600">
-                    Ваш успех на 80% зависит от системы. Скачайте и настройте эти инструменты один раз перед стартом.
-                </p>
-            </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                
-                <!-- Tool Card 1: Anki -->
-                <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
-                    <div class="flex items-center justify-between mb-3">
-                        <h4 class="font-bold text-gray-800">1. Anki (Интервальные повторения)</h4>
-                        <span class="text-2xl">🗂️</span>
-                    </div>
-                    <p class="text-sm text-gray-600 mb-3">Главный инструмент для слов. Забывание - это часть процесса, Anki оптимизирует это.</p>
-                    <ul class="text-sm text-gray-700 space-y-2 mb-4 list-disc pl-4">
-                        <li>Скачать <a href="#" class="text-blue-600 hover:underline">AnkiWeb</a> (PC/Mac).</li>
-                        <li>Найти колоду: "Goethe Institut A1 Wordlist" или "4000 German Words by Frequency".</li>
-                        <li><strong>Настройка:</strong> Поставьте лимит "New cards" на 10-15 в день, не больше.</li>
-                    </ul>
-                </div>
-
-                <!-- Tool Card 2: Dictionary -->
-                <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
-                    <div class="flex items-center justify-between mb-3">
-                        <h4 class="font-bold text-gray-800">2. Словари и Переводчики</h4>
-                        <span class="text-2xl">📖</span>
-                    </div>
-                    <p class="text-sm text-gray-600 mb-3">Не используйте Google Translate для обучения. Нужен контекст.</p>
-                    <ul class="text-sm text-gray-700 space-y-2 mb-4 list-disc pl-4">
-                        <li><strong>Reverso Context:</strong> Для фраз в контексте.</li>
-                        <li><strong>DeepL:</strong> Лучший нейросетевой переводчик.</li>
-                        <li><strong>Verbformen.de:</strong> Для спряжения глаголов (святая вещь для немецкого).</li>
-                    </ul>
-                </div>
-
-                <!-- Tool Card 3: Content Sources -->
-                <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
-                    <div class="flex items-center justify-between mb-3">
-                        <h4 class="font-bold text-gray-800">3. Источники Погружения</h4>
-                        <span class="text-2xl">🎧</span>
-                    </div>
-                    <p class="text-sm text-gray-600 mb-3">Источники для фазы "Accumulation" и дальше.</p>
-                    <ul class="text-sm text-gray-700 space-y-2 mb-4 list-disc pl-4">
-                        <li><strong>YouTube:</strong> Easy German (Street interviews), Dinge Erklärt (Kurzgesagt).</li>
-                        <li><strong>Deutsche Welle:</strong> Nicos Weg (Интерактивный сериал, маст-хэв).</li>
-                        <li><strong>Netflix:</strong> Dark, How to Sell Drugs Online (Fast).</li>
-                    </ul>
-                </div>
-
-            </div>
-        </section>
-
-        <!-- Long Term Stats -->
-        <section class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-            <div class="flex flex-col md:flex-row items-center justify-between mb-6">
-                <div>
-                    <h3 class="text-xl font-bold text-gray-900">Кривая Словарного Запаса</h3>
-                    <p class="text-sm text-gray-500">Экспоненциальный рост необходим для понимания нативного контента.</p>
-                </div>
-            </div>
-            <div class="chart-container" style="max-width: 800px; height: 350px;">
-                <canvas id="growthChart"></canvas>
+        <section id="setup" class="bg-gray-100 rounded-2xl p-6 md:p-8">
+            <h3 class="text-xl font-bold text-gray-900 mb-4">🛠 Настройка инструментов</h3>
+            <div class="grid md:grid-cols-3 gap-4">
+                <a href="https://apps.ankiweb.net/" target="_blank" class="block p-4 bg-white rounded-lg border hover:border-blue-400 transition">
+                    <div class="font-bold mb-1">1. Anki (Слова)</div>
+                    <div class="text-xs text-gray-500">Скачать программу для интервальных повторений.</div>
+                </a>
+                <a href="https://www.deepl.com/" target="_blank" class="block p-4 bg-white rounded-lg border hover:border-blue-400 transition">
+                    <div class="font-bold mb-1">2. DeepL (Перевод)</div>
+                    <div class="text-xs text-gray-500">Точный контекстный переводчик.</div>
+                </a>
+                <a href="https://www.dw.com/en/learn-german/s-2469" target="_blank" class="block p-4 bg-white rounded-lg border hover:border-blue-400 transition">
+                    <div class="font-bold mb-1">3. DW Learn German</div>
+                    <div class="text-xs text-gray-500">Базовый курс (Nicos Weg).</div>
+                </a>
             </div>
         </section>
 
     </main>
 
-    <footer class="bg-gray-50 border-t border-gray-200 mt-12 py-8">
-        <div class="max-w-6xl mx-auto px-4 text-center text-gray-500 text-sm">
-            <p>© 2024 DeutschMeister Interactive Plan. Основано на принципах Comprehensible Input.</p>
-            <p class="mt-2">Дисциплина > Мотивация. Viel Erfolg!</p>
+    <div id="task-modal" class="fixed inset-0 z-50 hidden modal-backdrop flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 transform transition-all scale-100">
+            <div class="flex justify-between items-center mb-4 border-b pb-2">
+                <h3 id="modal-task-title" class="text-xl font-bold text-gray-900">Инструкция</h3>
+                <button onclick="closeTaskModal()" class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+            </div>
+            <div id="modal-task-content" class="text-gray-700 space-y-4 text-sm leading-relaxed">
+                </div>
+            <div class="mt-6 text-right">
+                <button onclick="closeTaskModal()" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition">Понятно, приступаю</button>
+            </div>
         </div>
+    </div>
+
+    <div id="onboarding-modal" class="fixed inset-0 z-50 hidden modal-backdrop flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-8 relative">
+            <div class="text-center mb-6">
+                <div class="text-5xl mb-4">🇩🇪 🚀</div>
+                <h2 class="text-2xl font-bold text-gray-900">Добро пожаловать в DeutschMeister</h2>
+                <p class="text-gray-500 mt-2">Инструкция по эксплуатации вашего пути к C1</p>
+            </div>
+            
+            <div class="space-y-4 mb-8 text-sm md:text-base text-gray-700">
+                <div class="flex gap-3">
+                    <span class="bg-blue-100 text-blue-800 font-bold w-6 h-6 flex items-center justify-center rounded-full shrink-0">1</span>
+                    <p><strong>Методика 40 минут:</strong> Мы разбили 1.5 года на 4 фазы. На каждом этапе структура вашего 40-минутного занятия меняется. Следите за диаграммой!</p>
+                </div>
+                <div class="flex gap-3">
+                    <span class="bg-blue-100 text-blue-800 font-bold w-6 h-6 flex items-center justify-center rounded-full shrink-0">2</span>
+                    <p><strong>Ваш Dashboard:</strong> Это ваш пульт управления. Здесь список задач на сегодня. <br> <span class="text-emerald-600 font-semibold">Нажимайте на знак «?» рядом с задачей</span>, чтобы получить точную инструкцию (как настроить Anki, что смотреть, как писать).</p>
+                </div>
+                <div class="flex gap-3">
+                    <span class="bg-blue-100 text-blue-800 font-bold w-6 h-6 flex items-center justify-center rounded-full shrink-0">3</span>
+                    <p><strong>Магия Календаря:</strong> Изучение языка — это марафон. Главный враг — пропуски. Отмечайте выполненные дни галочками. Система будет хвалить вас.</p>
+                </div>
+            </div>
+
+            <button onclick="finishOnboarding()" class="w-full bg-blue-600 text-white py-3 rounded-xl font-bold text-lg hover:bg-blue-700 shadow-lg transition transform hover:scale-[1.01]">
+                Я готов начать! Los geht's!
+            </button>
+        </div>
+    </div>
+
+    <footer class="text-center py-6 text-gray-400 text-xs">
+        <p>© 2026 DeutschMeister. Interactive Plan.</p>
     </footer>
 
     <script>
-        // --- DATA STATE ---
-        // Defines the content and metrics for each phase of the 1.5 year journey
+        // --- DATA STATE (Расширенная) ---
         const appData = [
             {
                 id: 0,
-                title: "Фаза 1: Фундамент (Start)",
+                title: "Фаза 1: Фундамент",
                 duration: "Месяц 0-3",
                 goal: "A1 - Выживание",
-                level: "A0 -> A1",
-                desc: "Самый сложный этап. Ваш мозг сопротивляется новому языку. Задача: загрузить базу фонетики и самые частые слова, не обращая внимания на сложные правила.",
-                method: [
-                    "<strong>Фонетика:</strong> Потратьте первые 2 недели только на правила чтения и произношение. Если выучите неправильно сейчас, исправлять будете годами.",
-                    "<strong>Лексика:</strong> Топ-500 самых частотных слов. Учите существительные СРАЗУ с артиклем (Der/Die/Das) и множественным числом.",
-                    "<strong>Грамматика:</strong> Только Present Tense, базовый порядок слов (глагол на 2 месте), отрицание (nicht/kein)."
-                ],
+                level: "A0",
+                desc: "Самый сложный этап — запуск двигателя. Вы ничего не понимаете, и это нормально. Ваша цель: не учить «все подряд», а загрузить в голову фонетику и 500 самых важных слов.",
+                metrics: { vocab: "500-800", hours: "60" },
                 routine: [
-                    { activity: "Anki (Слова)", time: 15, color: "#3B82F6" },
-                    { activity: "Грамматика (Учебник)", time: 15, color: "#F59E0B" },
-                    { activity: "Аудирование (Фон)", time: 10, color: "#10B981" }
-                ],
-                metrics: { vocab: "500-800", hours: "60" }
+                    { 
+                        activity: "Anki (Лексика)", 
+                        time: 15, 
+                        color: "#3B82F6",
+                        instruction: "<strong>Цель:</strong> Выучить топ-500 слов.<br><br>1. Откройте приложение Anki.<br>2. Установите лимит: 10 новых карточек в день.<br>3. Когда видите карточку, произнесите слово вслух.<br>4. <strong>Важно:</strong> Учите существительные СРАЗУ с артиклем (Der/Die/Das). Цветом выделяйте род (Синий-Der, Красный-Die, Зеленый-Das)."
+                    },
+                    { 
+                        activity: "Грамматика (База)", 
+                        time: 15, 
+                        color: "#F59E0B",
+                        instruction: "<strong>Ресурс:</strong> Учебник или YouTube (Лист 'Немецкий A1').<br><br>Изучаем только:<br>- Спряжение глаголов в настоящем времени (ich mache, du machst).<br>- Порядок слов (Глагол ВСЕГДА на 2 месте).<br>- Отрицание (nicht/kein).<br>Не лезьте в дебри падежей пока что."
+                    },
+                    { 
+                        activity: "Аудирование (Фон)", 
+                        time: 10, 
+                        color: "#10B981",
+                        instruction: "<strong>Ресурс:</strong> Подкасты 'Slow German' или видео для новичков.<br><br>Просто слушайте, пока моете посуду или идете. Не пытайтесь переводить каждое слово. Привыкайте к мелодике языка."
+                    }
+                ]
             },
             {
                 id: 1,
-                title: "Фаза 2: Накопление (Input)",
+                title: "Фаза 2: Накопление",
                 duration: "Месяц 4-9",
                 goal: "A2/B1 - Понимание",
-                level: "A1 -> B1",
-                desc: "Золотое время. Вы меньше учите правила и больше потребляете контент. Мы переходим от учебников к адаптированным материалам.",
-                method: [
-                    "<strong>Nicos Weg:</strong> Пройдите курс A2 на Deutsche Welle.",
-                    "<strong>Easy German:</strong> Смотрите видео с субтитрами. Останавливайте, выписывайте интересные фразы.",
-                    "<strong>Graded Readers:</strong> Книги, адаптированные под уровень A2. Читайте без словаря, стараясь понять смысл из контекста."
-                ],
+                level: "A1 → A2",
+                desc: "Золотое время. Перестаем зубрить правила и начинаем «потреблять» язык. Вы смотрите сериалы и читаете адаптированные книги.",
+                metrics: { vocab: "2000+", hours: "180" },
                 routine: [
-                    { activity: "Anki (Повторение)", time: 10, color: "#3B82F6" },
-                    { activity: "Потребление (Reading/Video)", time: 25, color: "#10B981" },
-                    { activity: "Грамматика (Справочно)", time: 5, color: "#F59E0B" }
-                ],
-                metrics: { vocab: "2000+", hours: "180" }
+                    { 
+                        activity: "Anki (Повторение)", 
+                        time: 10, 
+                        color: "#3B82F6", 
+                        instruction: "Продолжаем делать Anki, но теперь добавляем туда не просто слова, а целые предложения, которые вы встретили в видео или книгах."
+                    },
+                    { 
+                        activity: "Потребление (Input)", 
+                        time: 25, 
+                        color: "#10B981", 
+                        instruction: "<strong>Это самое важное время.</strong><br>1. <strong>Nicos Weg (DW):</strong> Проходите по 1 уроку в день.<br>2. <strong>Easy German (YouTube):</strong> Смотрите интервью на улице. Включайте субтитры. Если фраза нравится — в Anki.<br>3. Читайте адаптированные книги уровня A2 (Dino lernt Deutsch)."
+                    },
+                    { 
+                        activity: "Грамматика (Справочно)", 
+                        time: 5, 
+                        color: "#F59E0B", 
+                        instruction: "Открывайте грамматику ТОЛЬКО если вы встретили конструкцию 3 раза и не поняли, почему она так строится. Учим «от проблемы», а не «от учебника»."
+                    }
+                ]
             },
             {
                 id: 2,
-                title: "Фаза 3: Активация (Output)",
+                title: "Фаза 3: Активация",
                 duration: "Месяц 10-15",
                 goal: "B2 - Свобода",
-                level: "B1 -> B2",
-                desc: "Вы много понимаете, но говорите с трудом. Пора ломать языковой барьер. Начинаем писать и говорить, даже с ошибками.",
-                method: [
-                    "<strong>Тандем/iTalki:</strong> Найдите партнера. 1-2 раза в неделю разговорная практика.",
-                    "<strong>Shadowing:</strong> Повторяйте за диктором вслух, копируя интонацию.",
-                    "<strong>Письмо:</strong> Пишите короткие эссе (5 предложений) о прошедшем дне. Проверяйте в DeepL (обратный перевод)."
-                ],
+                level: "B1 → B2",
+                desc: "Пора говорить. Вы много понимаете, но рот не открывается. Ломаем барьер через практику и письмо.",
+                metrics: { vocab: "3500+", hours: "360" },
                 routine: [
-                    { activity: "Anki (Фразы/Предложения)", time: 10, color: "#3B82F6" },
-                    { activity: "Нативный Контент (YouTube)", time: 20, color: "#10B981" },
-                    { activity: "Говорение/Письмо", time: 10, color: "#EF4444" }
-                ],
-                metrics: { vocab: "3500+", hours: "360" }
+                    { 
+                        activity: "Anki (Фразы)", 
+                        time: 10, 
+                        color: "#3B82F6", 
+                        instruction: "Удаляйте простые слова (кот, дом). Оставляйте только сложные идиомы и управление глаголов (ждать КОГО? warten AUF)."
+                    },
+                    { 
+                        activity: "Нативный Контент", 
+                        time: 20, 
+                        color: "#10B981", 
+                        instruction: "Переходим на Netflix. Сериалы 'Dark', 'How to Sell Drugs Online'. Субтитры — немецкие (не русские!). Пытайтесь угадывать смысл."
+                    },
+                    { 
+                        activity: "Говорение/Письмо", 
+                        time: 10, 
+                        color: "#EF4444", 
+                        instruction: "<strong>Активная фаза:</strong><br>1. <strong>Письмо:</strong> Пишите 5 предложений о своем дне. Переведите их в DeepL на русский, а потом обратно на немецкий. Сравните результат.<br>2. <strong>Shadowing:</strong> Включите видео, ставьте паузу и повторяйте за диктором, копируя интонацию."
+                    }
+                ]
             },
             {
                 id: 3,
-                title: "Фаза 4: Мастерство (Polish)",
+                title: "Фаза 4: Мастерство",
                 duration: "Месяц 16-18",
-                goal: "C1 - Профессионал",
-                level: "B2 -> C1",
-                desc: "Шлифовка нюансов. Вы работаете над идиомами, сложной грамматикой (Konjunktiv I/II) и профессиональной лексикой.",
-                method: [
-                    "<strong>Специфичный контент:</strong> Новости (Tagesschau), научные подкасты, современная литература.",
-                    "<strong>Моноязычный словарь:</strong> Duden. Забудьте про перевод на русский. Определение слова читаем на немецком.",
-                    "<strong>Тесты:</strong> Прорешивание пробных тестов Goethe C1 / TestDaF."
-                ],
+                goal: "C1 - Профи",
+                level: "C1",
+                desc: "Шлифовка. Сложная грамматика, профессиональная лексика, новости и научные статьи.",
+                metrics: { vocab: "5000+", hours: "500+" },
                 routine: [
-                    { activity: "Anki (Сложные нюансы)", time: 5, color: "#3B82F6" },
-                    { activity: "Сложный Контент (Новости)", time: 30, color: "#10B981" },
-                    { activity: "Грамматика C1", time: 5, color: "#F59E0B" }
-                ],
-                metrics: { vocab: "5000+", hours: "500+" }
+                    { activity: "Anki (Нюансы)", time: 5, color: "#3B82F6", instruction: "Карточки с синонимами. В чем разница между ändern, verändern и wechseln?" },
+                    { activity: "Сложный Контент", time: 30, color: "#10B981", instruction: "Новости (Tagesschau). Подкасты на нормальной скорости. Читайте Spiegel или Zeit." },
+                    { activity: "C1 Грамматика", time: 5, color: "#F59E0B", instruction: "Konjunktiv I (для косвенной речи), сложные пассивные конструкции. Подготовка к тесту Goethe/TestDaF." }
+                ]
             }
         ];
 
         let currentPhase = 0;
         let routineChartInstance = null;
-        let growthChartInstance = null;
+        let checkedTasks = new Set(); // Stores indices of checked tasks for current day
 
-        // --- INIT ---
         document.addEventListener('DOMContentLoaded', () => {
+            checkOnboarding();
             renderPhaseNav();
             loadPhase(0);
-            renderGrowthChart();
+            renderWeekTracker();
+            
+            // Check streak from local storage (Simulation)
+            const streak = localStorage.getItem('dm_streak') || 0;
+            document.getElementById('streak-count').innerText = streak;
         });
 
-        // --- RENDERERS ---
+        // --- ONBOARDING LOGIC ---
+        function checkOnboarding() {
+            if (!localStorage.getItem('dm_onboarding_done')) {
+                openOnboarding();
+            }
+        }
+        
+        function openOnboarding() {
+            document.getElementById('onboarding-modal').classList.remove('hidden');
+        }
+
+        function finishOnboarding() {
+            localStorage.setItem('dm_onboarding_done', 'true');
+            document.getElementById('onboarding-modal').classList.add('hidden');
+            // Celebrate start
+            confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+        }
+
+        // --- CORE LOGIC ---
 
         function renderPhaseNav() {
             const navContainer = document.getElementById('phase-nav');
             navContainer.innerHTML = appData.map((phase, index) => `
                 <button 
                     onclick="loadPhase(${index})"
-                    class="phase-btn flex flex-col items-center justify-center p-3 rounded-xl border border-gray-200 transition-all hover:bg-gray-50 ${index === 0 ? 'active' : 'bg-white text-gray-600'}"
+                    class="phase-btn flex flex-col items-center justify-center p-3 rounded-xl border border-gray-200 transition-all hover:bg-gray-50 bg-white text-gray-600"
                     id="btn-phase-${index}"
                 >
                     <span class="text-xs font-bold uppercase mb-1 opacity-70">${phase.duration}</span>
-                    <span class="text-sm md:text-base font-bold text-center leading-tight">${phase.title.split(':')[0]}</span>
-                    <span class="text-xs mt-1 text-center hidden md:block">${phase.level}</span>
+                    <span class="text-sm font-bold text-center leading-tight">${phase.title.split(':')[0]}</span>
                 </button>
             `).join('');
         }
@@ -375,178 +356,156 @@
             currentPhase = index;
             const data = appData[index];
 
-            // Update Active Button State
-            document.querySelectorAll('.phase-btn').forEach(btn => {
-                btn.classList.remove('active', 'bg-blue-500', 'text-white', 'border-blue-500', 'shadow-md');
-                btn.classList.add('bg-white', 'text-gray-600');
-            });
-            const activeBtn = document.getElementById(`btn-phase-${index}`);
-            activeBtn.classList.remove('bg-white', 'text-gray-600');
-            activeBtn.classList.add('active', 'shadow-md');
+            // Styles
+            document.querySelectorAll('.phase-btn').forEach(btn => btn.classList.remove('active'));
+            document.getElementById(`btn-phase-${index}`).classList.add('active');
 
-            // Update Text Content
+            // Text Data
             document.getElementById('phase-title').textContent = data.title;
-            document.getElementById('phase-duration').textContent = data.duration;
             document.getElementById('phase-desc').textContent = data.desc;
             document.getElementById('phase-goal').textContent = data.goal;
+            document.getElementById('current-level-display').textContent = data.level;
 
-            // Update Lists
-            const methodList = document.getElementById('phase-method');
-            methodList.innerHTML = data.method.map(item => `<li class="flex items-start gap-2"><span class="text-blue-500 mt-1">✓</span><span class="text-sm leading-relaxed">${item}</span></li>`).join('');
-
-            const routineList = document.getElementById('routine-list');
-            routineList.innerHTML = data.routine.map(item => `
-                <div class="flex items-center justify-between bg-white p-3 rounded border border-amber-100">
-                    <div class="flex items-center gap-2">
-                        <span class="w-3 h-3 rounded-full" style="background-color: ${item.color}"></span>
-                        <span class="text-sm font-medium text-gray-700">${item.activity}</span>
-                    </div>
-                    <span class="text-sm font-bold text-gray-900">${item.time} мин</span>
-                </div>
-            `).join('');
-
-            // Update Metrics
-            animateValue("metric-vocab", parseInt(document.getElementById('metric-vocab').innerText.replace('+','')), parseInt(data.metrics.vocab.replace('+','')), 1000);
+            // Metrics
+            document.getElementById('metric-vocab').textContent = data.metrics.vocab;
             document.getElementById('metric-hours').textContent = data.metrics.hours;
 
-            // Update Chart
+            // Routine List Generation (With Interactive Elements)
+            renderRoutineList(data.routine);
+            
+            // Chart
             updateRoutineChart(data.routine);
         }
 
-        function scrollToSection(id) {
-            document.getElementById(id).scrollIntoView({behavior: 'smooth'});
+        function renderRoutineList(routine) {
+            const list = document.getElementById('routine-list');
+            checkedTasks.clear(); // Reset daily checks when changing phase (simplified logic)
+            document.getElementById('reset-day-btn').classList.add('hidden');
+
+            list.innerHTML = routine.map((item, i) => `
+                <div class="flex items-center justify-between bg-white p-3 rounded-lg border border-gray-100 shadow-sm hover:shadow-md transition-shadow group">
+                    <div class="flex items-center gap-3">
+                        <label class="custom-checkbox relative flex items-center cursor-pointer">
+                            <input type="checkbox" class="sr-only" onchange="toggleTask(${i}, this)">
+                            <div class="w-6 h-6 border-2 border-gray-300 rounded-md transition-colors flex items-center justify-center bg-white group-hover:border-blue-400">
+                                <svg class="w-4 h-4 text-white hidden pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>
+                            </div>
+                        </label>
+                        
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <span class="w-2 h-2 rounded-full" style="background-color: ${item.color}"></span>
+                                <span class="text-sm font-bold text-gray-800">${item.activity}</span>
+                            </div>
+                            <span class="text-xs text-gray-400">${item.time} мин</span>
+                        </div>
+                    </div>
+
+                    <button onclick="openTaskModal(${i})" class="bg-blue-50 text-blue-600 hover:bg-blue-100 px-3 py-1 rounded text-xs font-semibold transition flex items-center gap-1">
+                        <span>❓</span> <span class="hidden sm:inline">Как делать?</span>
+                    </button>
+                </div>
+            `).join('');
         }
 
-        // --- CHARTS ---
+        // --- INTERACTIVITY ---
 
-        function updateRoutineChart(routineData) {
-            const ctx = document.getElementById('routineChart').getContext('2d');
-            
-            const labels = routineData.map(d => d.activity.split('(')[0]); // Short labels
-            const dataPoints = routineData.map(d => d.time);
-            const colors = routineData.map(d => d.color);
-
-            if (routineChartInstance) {
-                routineChartInstance.destroy();
+        function toggleTask(index, checkbox) {
+            if (checkbox.checked) {
+                checkedTasks.add(index);
+                // Check if all completed
+                const totalTasks = appData[currentPhase].routine.length;
+                if (checkedTasks.size === totalTasks) {
+                    completeDay();
+                }
+            } else {
+                checkedTasks.delete(index);
             }
+        }
+
+        function completeDay() {
+            // Animation
+            confetti({
+                particleCount: 150,
+                spread: 100,
+                origin: { y: 0.6 },
+                colors: ['#3B82F6', '#10B981', '#F59E0B']
+            });
+
+            // Update Streak Logic (Mock)
+            let streak = parseInt(localStorage.getItem('dm_streak') || 0);
+            streak++;
+            localStorage.setItem('dm_streak', streak);
+            document.getElementById('streak-count').innerText = streak;
+            
+            // Show reset button
+            document.getElementById('reset-day-btn').classList.remove('hidden');
+        }
+        
+        function resetDailyProgress() {
+            renderRoutineList(appData[currentPhase].routine);
+        }
+
+        function renderWeekTracker() {
+            const container = document.getElementById('week-tracker');
+            // Generate 7 circles, random fill for demo
+            let html = '';
+            const days = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+            days.forEach((day, i) => {
+                const active = i < new Date().getDay(); // Mock: fill days until today
+                const colorClass = active ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-gray-400 border-gray-200';
+                html += `
+                    <div class="flex flex-col items-center gap-1">
+                        <div class="w-8 h-8 rounded-full border-2 flex items-center justify-center text-xs font-bold ${colorClass}">
+                            ${active ? '✓' : ''}
+                        </div>
+                        <span class="text-[10px] uppercase text-gray-400">${day}</span>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+        }
+
+        // --- MODAL LOGIC (TASK INSTRUCTION) ---
+        function openTaskModal(taskIndex) {
+            const task = appData[currentPhase].routine[taskIndex];
+            document.getElementById('modal-task-title').innerText = task.activity;
+            document.getElementById('modal-task-content').innerHTML = task.instruction;
+            document.getElementById('task-modal').classList.remove('hidden');
+        }
+
+        function closeTaskModal() {
+            document.getElementById('task-modal').classList.add('hidden');
+        }
+
+        // --- CHART ---
+        function updateRoutineChart(routine) {
+            const ctx = document.getElementById('routineChart').getContext('2d');
+            const data = routine.map(r => r.time);
+            const labels = routine.map(r => r.activity.split('(')[0]);
+            const colors = routine.map(r => r.color);
+
+            if (routineChartInstance) routineChartInstance.destroy();
 
             routineChartInstance = new Chart(ctx, {
                 type: 'doughnut',
                 data: {
                     labels: labels,
                     datasets: [{
-                        data: dataPoints,
+                        data: data,
                         backgroundColor: colors,
                         borderWidth: 0,
-                        hoverOffset: 4
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
                     plugins: {
-                        legend: {
-                            position: 'bottom',
-                            labels: {
-                                usePointStyle: true,
-                                boxWidth: 8,
-                                font: { size: 11 }
-                            }
-                        },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    return ` ${context.label}: ${context.raw} мин`;
-                                }
-                            }
-                        }
-                    },
-                    cutout: '65%'
-                }
-            });
-        }
-
-        function renderGrowthChart() {
-            const ctx = document.getElementById('growthChart').getContext('2d');
-            
-            // Hypothetical growth curve
-            const labels = ["Месяц 0", "Месяц 3", "Месяц 6", "Месяц 9", "Месяц 12", "Месяц 15", "Месяц 18"];
-            const vocabData = [0, 500, 1200, 2000, 3000, 4000, 5000];
-            
-            growthChartInstance = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: 'Словарный запас (слов)',
-                        data: vocabData,
-                        borderColor: '#3B82F6',
-                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                        borderWidth: 3,
-                        tension: 0.4,
-                        fill: true,
-                        pointBackgroundColor: '#fff',
-                        pointBorderColor: '#3B82F6',
-                        pointRadius: 5
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            grid: {
-                                borderDash: [2, 2],
-                                color: '#f3f4f6'
-                            }
-                        },
-                        x: {
-                            grid: {
-                                display: false
-                            }
-                        }
-                    },
-                    plugins: {
-                        legend: {
-                            display: false
-                        },
-                        tooltip: {
-                            intersect: false,
-                            mode: 'index'
-                        }
+                        legend: { position: 'right', labels: { boxWidth: 10, usePointStyle: true } }
                     }
                 }
             });
         }
-
-        // Utility: Number animation
-        function animateValue(id, start, end, duration) {
-            if (isNaN(end)) return;
-            const obj = document.getElementById(id);
-            const range = end - start;
-            const minTimer = 50;
-            let stepTime = Math.abs(Math.floor(duration / range));
-            stepTime = Math.max(stepTime, minTimer);
-            
-            let startTime = new Date().getTime();
-            let endTime = startTime + duration;
-            let timer;
-          
-            function run() {
-                let now = new Date().getTime();
-                let remaining = Math.max((endTime - now) / duration, 0);
-                let value = Math.round(end - (remaining * range));
-                obj.innerHTML = value + (end > 2000 ? '+' : '');
-                if (value == end) {
-                    clearInterval(timer);
-                }
-            }
-            
-            timer = setInterval(run, stepTime);
-            run();
-        }
-
     </script>
 </body>
 </html>
