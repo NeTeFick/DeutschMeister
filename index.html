@@ -3,356 +3,459 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>DeutschMeister Pro | C1 Blueprint</title>
+    <title>DeutschMeister Pro | Vanilla C1</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
+    
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap');
+        
         body { font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; overflow-x: hidden; }
-        .glass { background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(12px); }
-        .animate-in { animation: fadeIn 0.4s ease-out forwards; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .glass { background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(12px); border-top: 1px solid rgba(255,255,255,0.5); }
         .no-scrollbar::-webkit-scrollbar { display: none; }
-        .btn-active:active { transform: scale(0.95); }
-        .timer-glow { box-shadow: 0 0 15px rgba(99, 102, 241, 0.4); }
+        
+        /* Анимации */
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes slideIn { from { transform: translateY(100%); } to { transform: translateY(0); } }
+        @keyframes highlightPulse { 
+            0% { background-color: rgba(250, 204, 21, 0.5); transform: scale(1.02); } 
+            100% { background-color: transparent; transform: scale(1); } 
+        }
+        
+        .animate-in { animation: fadeIn 0.4s ease-out forwards; }
+        .slide-up { animation: slideIn 0.3s ease-out forwards; }
+        .highlight-flash { animation: highlightPulse 1.5s ease-out; }
+        
+        /* Кастомные чекбоксы */
+        .custom-checkbox:checked + div { background-color: #4F46E5; border-color: #4F46E5; }
+        .custom-checkbox:checked + div svg { opacity: 1; }
+        
+        .btn-press:active { transform: scale(0.96); }
     </style>
 </head>
-<body class="bg-[#F8FAFC]">
-    <div id="root"></div>
+<body class="bg-[#F8FAFC] text-slate-800">
 
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+    <div id="app" class="max-w-md mx-auto min-h-screen bg-[#F8FAFC] flex flex-col pb-28 shadow-2xl relative">
+        
+        <header class="bg-white p-5 flex justify-between items-center sticky top-0 z-40 border-b border-slate-100/50 backdrop-blur-md bg-white/90">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg text-white">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+                </div>
+                <div>
+                    <h1 class="text-lg font-black tracking-tighter uppercase leading-none italic">Meister</h1>
+                    <p id="header-day" class="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-1">Загрузка...</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <span id="streak-badge" class="text-[10px] bg-orange-100 text-orange-600 px-2 py-1 rounded-full font-black hidden">🔥 0</span>
+                <div class="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
+            </div>
+        </header>
 
-        const firebaseConfig = {
-            apiKey: "AIzaSyBRAeIilgqixdDrBQFThpx00D2Te0gPuY0",
-            authDomain: "deutschmeister-489ea.firebaseapp.com",
-            projectId: "deutschmeister-489ea",
-            storageBucket: "deutschmeister-489ea.firebasestorage.app",
-            messagingSenderId: "82755973685",
-            appId: "1:82755973685:web:3413021c19d391107a777c"
-        };
+        <main id="main-content" class="p-6 flex-grow overflow-y-auto no-scrollbar relative">
+            </main>
 
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-        const provider = new GoogleAuthProvider();
+        <nav class="fixed bottom-0 left-0 right-0 glass pb-8 pt-4 z-50 rounded-t-[2.5rem] shadow-[0_-10px_40px_rgba(0,0,0,0.05)]">
+            <div class="max-w-md mx-auto flex justify-between items-center px-8">
+                <button onclick="router('home')" id="nav-home" class="nav-btn flex flex-col items-center gap-1 transition-all text-indigo-600 scale-110"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg><span class="text-[9px] font-black uppercase tracking-tighter">План</span></button>
+                <button onclick="router('stats')" id="nav-stats" class="nav-btn flex flex-col items-center gap-1 transition-all opacity-40 hover:opacity-100"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg><span class="text-[9px] font-black uppercase tracking-tighter">Статс</span></button>
+                <button onclick="router('method')" id="nav-method" class="nav-btn flex flex-col items-center gap-1 transition-all opacity-40 hover:opacity-100"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg><span class="text-[9px] font-black uppercase tracking-tighter">Метод</span></button>
+                <button onclick="router('map')" id="nav-map" class="nav-btn flex flex-col items-center gap-1 transition-all opacity-40 hover:opacity-100"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon><line x1="8" y1="2" x2="8" y2="18"></line><line x1="16" y1="6" x2="16" y2="22"></line></svg><span class="text-[9px] font-black uppercase tracking-tighter">Карта</span></button>
+            </div>
+        </nav>
 
-        window.API = { auth, db, provider, signInWithPopup, signOut, onAuthStateChanged, signInAnonymously, doc, setDoc, onSnapshot, getDoc };
-    </script>
+        <div id="toast" class="fixed top-24 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-6 py-3 rounded-full shadow-2xl z-[60] flex items-center gap-3 transition-all duration-300 opacity-0 translate-y-[-20px] pointer-events-none">
+            <span class="text-xl">🎉</span>
+            <div>
+                <p class="text-xs font-bold leading-none">Отличная работа!</p>
+                <p class="text-[10px] opacity-70 uppercase tracking-widest mt-1">День засчитан</p>
+            </div>
+        </div>
 
-    <script type="text/babel">
-        const { useState, useEffect, useMemo, useCallback } = React;
+        <div id="onboarding-modal" class="fixed inset-0 z-[70] hidden">
+            <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="closeOnboarding()"></div>
+            <div class="absolute bottom-0 left-0 right-0 bg-white rounded-t-[2.5rem] p-8 pb-12 slide-up max-w-md mx-auto">
+                <div class="w-12 h-1 bg-slate-200 rounded-full mx-auto mb-6"></div>
+                <h2 class="text-2xl font-black text-slate-900 mb-4 tracking-tight">Добро пожаловать в <span class="text-indigo-600">DeutschMeister!</span> 🇩🇪</h2>
+                <div class="space-y-4 text-sm text-slate-600 leading-relaxed mb-8 h-64 overflow-y-auto no-scrollbar">
+                    <p class="font-medium">Это не просто сайт, это ваша карта на ближайшие 1.5 года. Чтобы достичь C1, не нужна магия — нужна система.</p>
+                    
+                    <div class="bg-slate-50 p-4 rounded-xl space-y-2">
+                        <p><strong>1. Выберите фазу:</strong> Перейдите на вкладку "Карта" и выберите свой уровень.</p>
+                        <p><strong>2. Изучите "Что делать":</strong> Нажмите ℹ️ рядом с задачей, чтобы понять методику.</p>
+                        <p><strong>3. Соблюдайте режим:</strong> Всего 40 минут. Ежедневно.</p>
+                        <p><strong>4. Закрывайте дни:</strong> Ваша цель — закрашивать дни в календаре зеленым.</p>
+                    </div>
 
+                    <p class="text-xs uppercase font-bold text-rose-500 tracking-widest">⚠️ Пропуск одного дня отбрасывает вас на два назад.</p>
+                </div>
+                <button onclick="closeOnboarding()" class="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest shadow-xl shadow-indigo-500/30 btn-press">Начать путь</button>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // --- DATA & CONFIG ---
         const PHASES = [
-            { id: 0, level: 'A1', name: 'Закладка фундамента', days: 90, res: 'Nicos Weg A1', url: 'https://learngerman.dw.com/de/nicos-weg/c-36519687', tasksA: [{id:'a1_1', title:'Nicos Weg: Анализ', time:20, type:'Input'}, {id:'a1_2', title:'Anki: Новые карты', time:10, type:'Memory'}, {id:'a1_3', title:'V2 Rule: Синтаксис', time:10, type:'Study'}], tasksB: [{id:'b1_1', title:'Shadowing (NW)', time:15, type:'Output'}, {id:'b1_2', title:'Anki: Повторение', time:15, type:'Memory'}, {id:'b1_3', title:'SST: Монолог', time:10, type:'Output'}] },
-            { id: 1, level: 'A2', name: 'Строительство каркаса', days: 90, res: 'Nicos Weg A2', url: 'https://learngerman.dw.com/de/nicos-weg/c-36519709', tasksA: [{id:'a2_1', title:'Perfekt: Анализ текста', time:20, type:'Input'}, {id:'a2_2', title:'Dino lernt Deutsch', time:15, type:'Input'}, {id:'a2_3', title:'Anki: Новые фразы', time:5, type:'Memory'}], tasksB: [{id:'b2_1', title:'Синтез: Мой вчера', time:20, type:'Output'}, {id:'b2_2', title:'Anki: Сет', time:15, type:'Memory'}, {id:'b2_3', title:'ChatGPT: Проверка', time:5, type:'Output'}] },
-            { id: 2, level: 'B1', name: 'Преодоление порога', days: 150, res: 'Easy German Podcast', url: 'https://www.easygerman.org/podcast', tasksA: [{id:'a3_1', title:'Intensive Reading', time:25, type:'Input'}, {id:'a3_2', title:'Anki: Коллокации', time:10, type:'Memory'}, {id:'a3_3', title:'Nebensätze: Анализ', time:5, type:'Study'}], tasksB: [{id:'b3_1', title:'Аргументация (Weil)', time:20, type:'Output'}, {id:'b3_2', title:'Shadowing: Podcast', time:15, type:'Output'}, {id:'b3_3', title:'Anki: Сет', time:5, type:'Memory'}] },
-            { id: 3, level: 'B2', name: 'Иммерсия', days: 120, res: 'Роман: Tschick', url: 'https://www.youtube.com/results?search_query=tschick+hörbuch', tasksA: [{id:'a4_1', title:'Tschick: Чтение', time:25, type:'Input'}, {id:'a4_2', title:'B2 Vocabulary Anki', time:10, type:'Memory'}, {id:'a4_3', title:'Passiv: Анализ', time:5, type:'Study'}], tasksB: [{id:'b4_1', title:'Рецензия на главу', time:20, type:'Output'}, {id:'b4_2', title:'Дебаты (ChatGPT)', time:15, type:'Output'}, {id:'b4_3', title:'Anki: Повторение', time:5, type:'Memory'}] },
-            { id: 4, level: 'C1', name: 'Мастерство', days: 97, res: 'Die Zeit', url: 'https://www.zeit.de/index', tasksA: [{id:'a5_1', title:'Die Zeit: Анализ', time:25, type:'Input'}, {id:'a5_2', title:'Академический вокаб', time:10, type:'Memory'}, {id:'a5_3', title:'TestDaF: Leseverstehen', time:5, type:'Study'}], tasksB: [{id:'b5_1', title:'Письмо C1 (Таймер)', time:25, type:'Output'}, {id:'b5_2', title:'Монолог C1', time:10, type:'Output'}, {id:'b5_3', title:'Anki: Финал', time:5, type:'Memory'}] }
+            { id: 0, level: 'A1', name: 'Закладка фундамента', days: 90, res: 'Nicos Weg A1', url: 'https://learngerman.dw.com/de/nicos-weg/c-36519687', tasksA: [{id:'a1_1', title:'Nicos Weg: Анализ', time:20, type:'Input', method:'input_analysis'}, {id:'a1_2', title:'Anki: Новые карты', time:10, type:'Memory', method:'anki_new'}, {id:'a1_3', title:'V2 Rule: Синтаксис', time:10, type:'Study', method:'grammar_v2'}], tasksB: [{id:'b1_1', title:'Shadowing (NW)', time:15, type:'Output', method:'shadowing'}, {id:'b1_2', title:'Anki: Повторение', time:15, type:'Memory', method:'anki_review'}, {id:'b1_3', title:'SST: Монолог', time:10, type:'Output', method:'sst'}] },
+            { id: 1, level: 'A2', name: 'Строительство каркаса', days: 90, res: 'Nicos Weg A2', url: 'https://learngerman.dw.com/de/nicos-weg/c-36519709', tasksA: [{id:'a2_1', title:'Perfekt: Анализ текста', time:20, type:'Input', method:'input_analysis'}, {id:'a2_2', title:'Dino lernt Deutsch', time:15, type:'Input', method:'reading'}, {id:'a2_3', title:'Anki: Новые фразы', time:5, type:'Memory', method:'anki_new'}], tasksB: [{id:'b2_1', title:'Синтез: Мой вчера', time:20, type:'Output', method:'writing'}, {id:'b2_2', title:'Anki: Сет', time:15, type:'Memory', method:'anki_review'}, {id:'b2_3', title:'ChatGPT: Проверка', time:5, type:'Output', method:'chatgpt'}] },
+            { id: 2, level: 'B1', name: 'Преодоление порога', days: 150, res: 'Easy German Podcast', url: 'https://www.easygerman.org/podcast', tasksA: [{id:'a3_1', title:'Intensive Reading', time:25, type:'Input', method:'reading'}, {id:'a3_2', title:'Anki: Коллокации', time:10, type:'Memory', method:'anki_new'}, {id:'a3_3', title:'Nebensätze: Анализ', time:5, type:'Study', method:'grammar_adv'}], tasksB: [{id:'b3_1', title:'Аргументация (Weil)', time:20, type:'Output', method:'writing'}, {id:'b3_2', title:'Shadowing: Podcast', time:15, type:'Output', method:'shadowing'}, {id:'b3_3', title:'Anki: Сет', time:5, type:'Memory', method:'anki_review'}] },
+            { id: 3, level: 'B2', name: 'Иммерсия', days: 120, res: 'Роман: Tschick', url: 'https://www.youtube.com/results?search_query=tschick+hörbuch', tasksA: [{id:'a4_1', title:'Tschick: Чтение', time:25, type:'Input', method:'reading'}, {id:'a4_2', title:'B2 Vocabulary Anki', time:10, type:'Memory', method:'anki_new'}, {id:'a4_3', title:'Passiv: Анализ', time:5, type:'Study', method:'grammar_adv'}], tasksB: [{id:'b4_1', title:'Рецензия на главу', time:20, type:'Output', method:'writing'}, {id:'b4_2', title:'Дебаты (ChatGPT)', time:15, type:'Output', method:'chatgpt'}, {id:'b4_3', title:'Anki: Повторение', time:5, type:'Memory', method:'anki_review'}] },
+            { id: 4, level: 'C1', name: 'Мастерство', days: 97, res: 'Die Zeit', url: 'https://www.zeit.de/index', tasksA: [{id:'a5_1', title:'Die Zeit: Анализ', time:25, type:'Input', method:'reading'}, {id:'a5_2', title:'Академический вокаб', time:10, type:'Memory', method:'anki_new'}, {id:'a5_3', title:'TestDaF: Leseverstehen', time:5, type:'Study', method:'test_daf'}], tasksB: [{id:'b5_1', title:'Письмо C1 (Таймер)', time:25, type:'Output', method:'writing'}, {id:'b5_2', title:'Монолог C1', time:10, type:'Output', method:'sst'}, {id:'b5_3', title:'Anki: Финал', time:5, type:'Memory', method:'anki_review'}] }
         ];
 
-        const Svg = {
-            Zap: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>,
-            Chart: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>,
-            Book: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>,
-            Map: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon><line x1="8" y1="2" x2="8" y2="18"></line><line x1="16" y1="6" x2="16" y2="22"></line></svg>,
-            Gear: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>,
-            Check: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>,
-            Play: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+        const METHODOLOGY = {
+            'input_analysis': { title: 'Активный анализ', text: 'Не просто слушайте. Разбирайте каждое предложение. Почему здесь Akkusativ? Какой это глагол? Выписывайте незнакомые слова сразу в Anki.' },
+            'anki_new': { title: 'Anki: Загрузка', text: 'Учите слова только в контексте предложений. Никаких изолированных слов. Карточка должна содержать: Слово, Пример, Аудио.' },
+            'anki_review': { title: 'Anki: Интервалы', text: 'Самая важная часть дня. Не пропускайте. Если карточка "Hard" — нажмите Hard. Будьте честны с алгоритмом.' },
+            'shadowing': { title: 'Shadowing', text: 'Слушайте аудио и повторяйте за диктором с задержкой в 0.5 секунды. Копируйте интонацию, скорость и эмоции.' },
+            'sst': { title: 'SST (Speaking)', text: 'Говорите вслух самому себе или диктофону. Описывайте, что видите вокруг. Используйте новые слова, выученные сегодня.' },
+            'writing': { title: 'Письмо', text: 'Пишите текст на 100-150 слов. Затем скормите его ChatGPT с промптом "Исправь ошибки и объясни грамматику".' },
+            'chatgpt': { title: 'AI Спарринг', text: 'Используйте промпт в разделе "Метод" для симуляции диалога с носителем.' },
+            'reading': { title: 'Экстенсивное чтение', text: 'Читайте без словаря. Понимайте суть из контекста. Останавливайтесь только если потеряли нить повествования.' },
+            'grammar_v2': { title: 'Правило V2', text: 'В немецком глагол ВСЕГДА на втором месте в повествовании. Это железобетонное правило.' }
         };
 
-        const INITIAL_STATE = { 
-            currentPhaseId: 0, completedTasks: [], streak: 0, 
-            startDate: new Date().toISOString(), lastActivity: new Date().toDateString(), 
-            history: {}, autoAdvance: true, lastUpdate: 0, ankiLink: ''
+        // --- STATE MANAGEMENT ---
+        const INITIAL_STATE = {
+            currentPhaseId: 0,
+            completedTaskIds: [],
+            history: {}, // Format: "YYYY-MM-DD": true/false (full completion)
+            lastVisitDate: new Date().toDateString(),
+            streak: 0,
+            hasSeenOnboarding: false
         };
 
-        function App() {
-            const [user, setUser] = useState(null);
-            const [view, setView] = useState('home');
-            const [isCloudSynced, setIsCloudSynced] = useState(false);
-            const [copyOk, setCopyOk] = useState(false);
-            const [timer, setTimer] = useState({ active: false, seconds: 0, taskId: null });
-            
-            const [state, setState] = useState(() => {
-                const local = localStorage.getItem('meister_v7_data');
-                return local ? JSON.parse(local) : INITIAL_STATE;
-            });
+        let state = JSON.parse(localStorage.getItem('meister_vanilla_state')) || INITIAL_STATE;
+        let currentView = 'home';
 
-            useEffect(() => {
-                const unsubAuth = window.API.onAuthStateChanged(window.API.auth, (u) => {
-                    setUser(u);
-                    if (!u) window.API.signInAnonymously(window.API.auth);
-                });
-                return unsubAuth;
-            }, []);
-
-            useEffect(() => {
-                if (!user) return;
-                const docRef = window.API.doc(window.API.db, "users_v5", user.uid);
-                const unsub = window.API.onSnapshot(docRef, (snap) => {
-                    if (snap.exists()) {
-                        const cloud = snap.data();
-                        if (cloud.lastUpdate > state.lastUpdate) {
-                            setState(cloud);
-                            localStorage.setItem('meister_v7_data', JSON.stringify(cloud));
-                        }
-                        setIsCloudSynced(true);
-                    } else {
-                        window.API.setDoc(docRef, state);
-                        setIsCloudSynced(true);
-                    }
-                }, () => setIsCloudSynced(false));
-                return unsub;
-            }, [user, state.lastUpdate]);
-
-            const updateState = async (newState) => {
-                const updated = { ...newState, lastUpdate: Date.now() };
-                setState(updated);
-                localStorage.setItem('meister_v7_data', JSON.stringify(updated));
-                if (user) {
-                    try {
-                        const docRef = window.API.doc(window.API.db, "users_v5", user.uid);
-                        await window.API.setDoc(docRef, updated);
-                        setIsCloudSynced(true);
-                    } catch (e) { setIsCloudSynced(false); }
-                }
-            };
-
-            // Timer Logic
-            useEffect(() => {
-                let interval;
-                if (timer.active && timer.seconds > 0) {
-                    interval = setInterval(() => {
-                        setTimer(prev => ({ ...prev, seconds: prev.seconds - 1 }));
-                    }, 1000);
-                } else if (timer.seconds === 0 && timer.active) {
-                    alert("Время вышло! Задача выполнена.");
-                    setTimer({ active: false, seconds: 0, taskId: null });
-                }
-                return () => clearInterval(interval);
-            }, [timer.active, timer.seconds]);
-
-            const startTimer = (taskId, minutes) => {
-                setTimer({ active: true, seconds: minutes * 60, taskId });
-            };
-
-            const daysPassed = useMemo(() => {
-                const diff = new Date() - new Date(state.startDate);
-                return Math.max(0, Math.floor(diff / 86400000));
-            }, [state.startDate]);
-
-            const isDayA = daysPassed % 2 === 0;
-            const currentPhase = PHASES.find(p => p.id === state.currentPhaseId) || PHASES[0];
-            const tasks = isDayA ? currentPhase.tasksA : currentPhase.tasksB;
-
-            const totalHours = useMemo(() => {
-                const completedCount = Object.values(state.history).reduce((a, b) => a + b, 0);
-                return (completedCount * 13.3) / 60; // Среднее время задачи ~13 мин
-            }, [state.history]);
-
-            const toggleTask = (id) => {
-                const isDone = state.completedTasks.includes(id);
-                const nt = isDone ? state.completedTasks.filter(t => t !== id) : [...state.completedTasks, id];
-                const today = new Date().toISOString().split('T')[0];
-                const todayHuman = new Date().toDateString();
-                let ns = state.streak;
-                if (!isDone && state.lastActivity !== todayHuman) ns += 1;
-                const newHistory = { ...state.history };
-                newHistory[today] = nt.length;
-                updateState({ ...state, completedTasks: nt, lastActivity: todayHuman, streak: ns, history: newHistory });
-            };
-
-            return (
-                <div className="max-w-md mx-auto min-h-screen bg-[#F8FAFC] flex flex-col pb-28 shadow-xl relative">
-                    <header className="bg-white p-5 flex justify-between items-center sticky top-0 z-50 border-b border-slate-100">
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg text-white"><Svg.Zap /></div>
-                            <div>
-                                <h1 className="text-lg font-black tracking-tighter uppercase leading-none italic">Meister</h1>
-                                <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest mt-1">День {daysPassed + 1}/547</p>
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-3">
-                            <div className={`w-2 h-2 rounded-full ${isCloudSynced ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-amber-400'}`}></div>
-                            {user && !user.isAnonymous ? (
-                                <img src={user.photoURL} className="w-9 h-9 rounded-full border-2 border-indigo-100" />
-                            ) : (
-                                <button onClick={() => window.API.signInWithPopup(window.API.auth, window.API.provider)} className="bg-indigo-600 text-white text-[10px] px-4 py-2 rounded-xl font-bold shadow-md btn-active leading-none">ВОЙТИ</button>
-                            )}
-                        </div>
-                    </header>
-
-                    <main className="p-6 flex-grow overflow-y-auto no-scrollbar">
-                        {view === 'home' && (
-                            <div className="space-y-6 animate-in">
-                                <div className="flex justify-between items-end">
-                                    <div>
-                                        <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-1">{isDayA ? 'Цикл A: Ввод' : 'Цикл B: Вывод'}</p>
-                                        <h2 className="text-2xl font-black text-slate-900 leading-tight tracking-tight">План на сегодня</h2>
-                                    </div>
-                                    <div className="flex flex-col items-end gap-1">
-                                        <span className="text-[10px] font-black text-white bg-indigo-600 px-3 py-1 rounded-full uppercase">{currentPhase.level}</span>
-                                        <span className="text-[10px] text-orange-500 font-black tracking-widest uppercase">🔥 {state.streak}</span>
-                                    </div>
-                                </div>
-
-                                <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white shadow-2xl relative overflow-hidden group">
-                                    <div className="relative z-10 space-y-4">
-                                        <h3 className="text-2xl font-black mb-6 italic tracking-tight">40 Минут <span className="text-indigo-400 uppercase tracking-tighter">fokus</span></h3>
-                                        {tasks.map(t => (
-                                            <div key={t.id} className="flex items-center gap-4 bg-white/5 p-4 rounded-[1.8rem] border border-white/5 transition-all group/task">
-                                                <div onClick={() => toggleTask(t.id)} className={`w-8 h-8 rounded-xl border-2 flex items-center justify-center cursor-pointer transition-all ${state.completedTasks.includes(t.id) ? 'bg-indigo-500 border-indigo-500 shadow-lg shadow-indigo-500/50' : 'border-white/20'}`}>
-                                                    {state.completedTasks.includes(t.id) && <Svg.Check />}
-                                                </div>
-                                                <div className="flex-grow cursor-pointer" onClick={() => toggleTask(t.id)}>
-                                                    <p className={`font-bold text-sm ${state.completedTasks.includes(t.id) ? 'line-through opacity-40 text-slate-400' : ''}`}>{t.title}</p>
-                                                    <p className="text-[9px] font-bold text-white/40 uppercase tracking-widest mt-1">{t.time} МИН • {t.type}</p>
-                                                </div>
-                                                {timer.active && timer.taskId === t.id ? (
-                                                    <div className="bg-indigo-600 px-3 py-1 rounded-full font-black text-[10px] animate-pulse">
-                                                        {Math.floor(timer.seconds / 60)}:{(timer.seconds % 60).toString().padStart(2, '0')}
-                                                    </div>
-                                                ) : (
-                                                    !state.completedTasks.includes(t.id) && (
-                                                        <button onClick={() => startTimer(t.id, t.time)} className="opacity-0 group-hover/task:opacity-100 transition-all bg-white/10 p-2 rounded-full hover:bg-indigo-500"><Svg.Play /></button>
-                                                    )
-                                                )}
-                                            </div>
-                                        ))}
-                                    </div>
-                                    <div className="absolute -bottom-10 -right-10 w-48 h-48 bg-indigo-500/10 blur-[80px] rounded-full"></div>
-                                </div>
-                                <div className="bg-white p-7 rounded-[2rem] border border-slate-100 shadow-sm flex justify-between items-center">
-                                    <div>
-                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Ресурс: {currentPhase.res}</p>
-                                        <button onClick={() => window.open(currentPhase.url, '_blank')} className="text-xs font-black text-indigo-600 uppercase tracking-widest border-b-2 border-indigo-100 hover:border-indigo-600 transition-all">Открыть материал →</button>
-                                    </div>
-                                    {state.ankiLink && (
-                                        <button onClick={() => window.open(state.ankiLink, '_blank')} className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center border border-slate-100 btn-active">⭐</button>
-                                    )}
-                                </div>
-                            </div>
-                        )}
-
-                        {view === 'stats' && (
-                            <div className="space-y-6 animate-in text-center">
-                                <h2 className="text-2xl font-black text-slate-900 italic tracking-tight uppercase">Dashboard</h2>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="bg-indigo-600 p-6 rounded-[2rem] text-white shadow-xl relative overflow-hidden">
-                                        <p className="text-[9px] font-black uppercase opacity-60 mb-2 leading-none tracking-widest">Прогресс к C1</p>
-                                        <p className="text-2xl font-black">{totalHours.toFixed(1)} ч.</p>
-                                        <p className="text-[8px] mt-2 opacity-50 uppercase font-black">из 365 запланированных</p>
-                                        <div className="absolute bottom-0 left-0 h-1 bg-white/20" style={{width: `${(totalHours/365)*100}%`}}></div>
-                                    </div>
-                                    <div className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm">
-                                        <p className="text-[9px] font-black uppercase text-slate-400 mb-2 leading-none tracking-widest">Дней в строю</p>
-                                        <p className="text-2xl font-black text-slate-800 tracking-tighter">{state.streak}</p>
-                                    </div>
-                                </div>
-                                <div className="bg-white p-7 rounded-[2.5rem] border border-slate-100 h-44 flex items-end justify-between px-6 shadow-sm">
-                                    {[...Array(7)].map((_, i) => {
-                                        const d = new Date(); d.setDate(d.getDate() - (6-i));
-                                        const ds = d.toISOString().split('T')[0];
-                                        const h = ((state.history[ds] || 0) / 3) * 100;
-                                        return (
-                                            <div key={i} className="flex flex-col items-center gap-2">
-                                                <div className="w-5 bg-slate-50 rounded-full h-24 relative overflow-hidden border border-slate-100">
-                                                    <div className="absolute bottom-0 w-full bg-indigo-500 transition-all duration-700" style={{height: `${Math.min(100, h)}%`}} />
-                                                </div>
-                                                <span className="text-[8px] font-black text-slate-300 uppercase">{d.toLocaleDateString('ru',{weekday:'short'})}</span>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        )}
-
-                        {view === 'method' && (
-                            <div className="space-y-6 animate-in">
-                                <h2 className="text-2xl font-black text-slate-900 italic tracking-tight">Протокол</h2>
-                                <div className="bg-indigo-600 p-8 rounded-[2.5rem] text-white shadow-xl relative overflow-hidden">
-                                    <h4 className="font-black text-lg mb-4 italic leading-tight uppercase tracking-tighter">ChatGPT SST Prompt</h4>
-                                    <p className="text-[11px] opacity-80 mb-6 italic">Используй это для активации центра Брока в День Б.</p>
-                                    <button onClick={() => {
-                                        const p = `Ты профессиональный DaF-преподаватель. Я на уровне ${currentPhase.level}. Проведи со мной сессию SST (Student Speaking Time). Исправляй ошибки, объясняй правила и используй род с цветовым кодированием. Начни диалог на тему: ${currentPhase.res}.`;
-                                        navigator.clipboard.writeText(p); setCopyOk(true); setTimeout(() => setCopyOk(false), 2000);
-                                    }} className="w-full bg-white text-indigo-600 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all btn-active shadow-lg">{copyOk ? 'СКОПИРОВАНО!' : 'КОПИРОВАТЬ ПРОМПТ'}</button>
-                                </div>
-                                <div className="grid grid-cols-3 gap-3">
-                                    <div className="p-4 bg-blue-500 rounded-2xl text-center shadow-lg shadow-blue-500/20"><p className="text-[10px] font-black text-white">DER</p><p className="text-[7px] text-white/60 uppercase">СИНИЙ</p></div>
-                                    <div className="p-4 bg-red-500 rounded-2xl text-center shadow-lg shadow-red-500/20"><p className="text-[10px] font-black text-white">DIE</p><p className="text-[7px] text-white/60 uppercase">КРАСНЫЙ</p></div>
-                                    <div className="p-4 bg-emerald-500 rounded-2xl text-center shadow-lg shadow-emerald-500/20"><p className="text-[10px] font-black text-white">DAS</p><p className="text-[7px] text-white/60 uppercase">ЗЕЛЕНЫЙ</p></div>
-                                </div>
-                            </div>
-                        )}
-
-                        {view === 'map' && (
-                            <div className="space-y-4 animate-in">
-                                <h2 className="text-2xl font-black text-slate-800 italic tracking-tight">Дорожная карта</h2>
-                                {PHASES.map(p => (
-                                    <div key={p.id} onClick={() => updateState({...state, currentPhaseId: p.id, completedTasks: []})} className={`p-6 rounded-[2.5rem] border-2 transition-all cursor-pointer relative ${state.currentPhaseId === p.id ? 'bg-indigo-600 text-white border-indigo-500 shadow-xl scale-[1.02]' : 'bg-white border-slate-100 opacity-60 hover:opacity-100'}`}>
-                                        <div className="flex justify-between items-center mb-1">
-                                            <span className="text-[10px] font-black uppercase opacity-80">{p.days} дней</span>
-                                            <span className="font-black text-xl leading-none">{p.level}</span>
-                                        </div>
-                                        <h3 className="font-black text-lg leading-none italic">{p.name}</h3>
-                                        {state.currentPhaseId === p.id && <div className="absolute top-4 right-4 text-white"><Svg.Check /></div>}
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-
-                        {view === 'settings' && (
-                          <div className="space-y-6 animate-in">
-                              <h2 className="text-2xl font-black text-slate-800 italic tracking-tight">Опции</h2>
-                              <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm space-y-6">
-                                  <div className="space-y-3">
-                                      <p className="font-black text-slate-800 text-[10px] uppercase tracking-widest italic">Личный ресурс (Anki Link)</p>
-                                      <input 
-                                        type="text" 
-                                        value={state.ankiLink} 
-                                        onChange={(e) => updateState({...state, ankiLink: e.target.value})}
-                                        placeholder="https://ankiweb.net/decks/"
-                                        className="w-full bg-slate-50 p-4 rounded-2xl text-xs border border-slate-100 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                                      />
-                                  </div>
-                                  <div className="pt-4 border-t border-slate-100 flex flex-col gap-4">
-                                    <button onClick={() => window.open(`https://www.google.com/calendar/render?action=TEMPLATE&text=DeutschMeister%20Training&recur=RRULE:FREQ=DAILY`, '_blank')} className="w-full flex items-center justify-between p-5 bg-slate-900 rounded-[1.5rem] text-white font-bold text-[10px] uppercase tracking-widest shadow-xl btn-active leading-none"><span>Google Calendar</span><span>📅</span></button>
-                                    
-                                    {user && !user.isAnonymous ? (
-                                        <button onClick={() => window.API.signOut(window.API.auth).then(() => window.location.reload())} className="w-full p-5 bg-rose-50 text-rose-500 rounded-[1.5rem] font-bold text-[10px] uppercase tracking-widest border border-rose-100 btn-active leading-none">Выйти</button>
-                                    ) : (
-                                        <button onClick={() => window.API.signInWithPopup(window.API.auth, window.API.provider)} className="w-full p-5 bg-indigo-600 text-white rounded-[1.5rem] font-bold text-[10px] uppercase tracking-widest shadow-xl btn-active leading-none">Войти через Google</button>
-                                    )}
-                                  </div>
-                              </div>
-                              <p className="text-[8px] text-center text-slate-300 font-black uppercase tracking-widest leading-none">DeutschMeister Pro v7.5 • 2026</p>
-                          </div>
-                        )}
-                    </main>
-
-                    <nav className="fixed bottom-0 left-0 right-0 glass border-t border-slate-100 px-6 pb-10 pt-4 z-50 rounded-t-[2.5rem] shadow-lg">
-                        <div className="max-w-md mx-auto flex justify-between items-center px-4">
-                            <button onClick={() => setView('home')} className={`flex flex-col items-center gap-1.5 transition-all ${view === 'home' ? 'text-indigo-600 scale-110 font-black' : 'opacity-40'}`}><Svg.Zap /><span className="text-[8px] font-black uppercase mt-1 tracking-tighter">План</span></button>
-                            <button onClick={() => setView('stats')} className={`flex flex-col items-center gap-1.5 transition-all ${view === 'stats' ? 'text-indigo-600 scale-110 font-black' : 'opacity-40'}`}><Svg.Chart /><span className="text-[8px] font-black uppercase mt-1 tracking-tighter">Статс</span></button>
-                            <button onClick={() => setView('method')} className={`flex flex-col items-center gap-1.5 transition-all ${view === 'method' ? 'text-indigo-600 scale-110 font-black' : 'opacity-40'}`}><Svg.Book /><span className="text-[8px] font-black uppercase mt-1 tracking-tighter">Метод</span></button>
-                            <button onClick={() => setView('map')} className={`flex flex-col items-center gap-1.5 transition-all ${view === 'map' ? 'text-indigo-600 scale-110 font-black' : 'opacity-40'}`}><Svg.Map /><span className="text-[8px] font-black uppercase mt-1 tracking-tighter">Карта</span></button>
-                            <button onClick={() => setView('settings')} className={`flex flex-col items-center gap-1.5 transition-all ${view === 'settings' ? 'text-indigo-600 scale-110 font-black' : 'opacity-40'}`}><Svg.Gear /><span className="text-[8px] font-black uppercase mt-1 tracking-tighter">Опции</span></button>
-                        </div>
-                    </nav>
-                </div>
-            );
+        // --- CORE FUNCTIONS ---
+        function saveState() {
+            localStorage.setItem('meister_vanilla_state', JSON.stringify(state));
+            updateHeader();
         }
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
+        function updateHeader() {
+            const daysPassed = Math.floor((new Date() - new Date(2025, 0, 1)) / (1000 * 60 * 60 * 24)); // Mock start date logic
+            document.getElementById('header-day').innerText = `День ${state.streak} / Строю`;
+            
+            const badge = document.getElementById('streak-badge');
+            if(state.streak > 0) {
+                badge.innerText = `🔥 ${state.streak}`;
+                badge.classList.remove('hidden');
+            } else {
+                badge.classList.add('hidden');
+            }
+        }
+
+        function checkDateReset() {
+            const today = new Date().toDateString();
+            if (state.lastVisitDate !== today) {
+                // New day!
+                state.completedTaskIds = []; // Reset checkboxes
+                state.lastVisitDate = today;
+                
+                // Check if yesterday was skipped for streak logic
+                const yesterday = new Date();
+                yesterday.setDate(yesterday.getDate() - 1);
+                if (!state.history[yesterday.toDateString()]) {
+                    // Streak broken (simple logic, can be improved)
+                    // state.streak = 0; // Optional: strict mode
+                }
+                saveState();
+            }
+        }
+
+        // --- ROUTING & RENDERING ---
+        function router(view) {
+            currentView = view;
+            
+            // Update Nav Icons
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.classList.add('opacity-40', 'hover:opacity-100');
+                btn.classList.remove('text-indigo-600', 'scale-110');
+            });
+            const activeBtn = document.getElementById(`nav-${view}`);
+            if(activeBtn) {
+                activeBtn.classList.remove('opacity-40', 'hover:opacity-100');
+                activeBtn.classList.add('text-indigo-600', 'scale-110');
+            }
+
+            const main = document.getElementById('main-content');
+            main.innerHTML = ''; // Clear content
+
+            if (view === 'home') renderHome(main);
+            if (view === 'stats') renderStats(main);
+            if (view === 'method') renderMethod(main);
+            if (view === 'map') renderMap(main);
+        }
+
+        // --- VIEW: HOME ---
+        function renderHome(container) {
+            const phase = PHASES.find(p => p.id === state.currentPhaseId) || PHASES[0];
+            const isDayA = new Date().getDate() % 2 !== 0; // Odd days = A, Even = B
+            const tasks = isDayA ? phase.tasksA : phase.tasksB;
+            
+            const allDone = tasks.every(t => state.completedTaskIds.includes(t.id));
+
+            let html = `
+                <div class="space-y-6 animate-in">
+                    <div class="flex justify-between items-end">
+                        <div>
+                            <p class="text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-1">${isDayA ? 'Цикл A: Ввод' : 'Цикл B: Вывод'}</p>
+                            <h2 class="text-2xl font-black text-slate-900 leading-tight tracking-tight">План на сегодня</h2>
+                        </div>
+                        <span class="text-[10px] font-black text-white bg-indigo-600 px-3 py-1 rounded-full uppercase shadow-md shadow-indigo-200">${phase.level}</span>
+                    </div>
+
+                    <div class="bg-slate-900 rounded-[2.5rem] p-8 text-white shadow-2xl relative overflow-hidden group">
+                        <div class="relative z-10 space-y-5">
+                             <div class="flex justify-between items-center mb-2">
+                                <h3 class="text-2xl font-black italic tracking-tight">40 Минут <span class="text-indigo-400 uppercase tracking-tighter">fokus</span></h3>
+                                ${allDone ? '<span class="text-emerald-400 text-xs font-black uppercase tracking-widest border border-emerald-500/30 px-2 py-1 rounded-lg bg-emerald-500/10">Готово</span>' : ''}
+                             </div>
+                            
+                            ${tasks.map(t => {
+                                const isChecked = state.completedTaskIds.includes(t.id);
+                                return `
+                                <div class="flex items-center gap-4 bg-white/5 p-3 pr-4 rounded-[1.5rem] border border-white/5 transition-all hover:bg-white/10">
+                                    <label class="relative cursor-pointer">
+                                        <input type="checkbox" class="custom-checkbox sr-only" 
+                                            onchange="toggleTask('${t.id}', ${tasks.length})" 
+                                            ${isChecked ? 'checked' : ''}>
+                                        <div class="w-10 h-10 rounded-xl border-2 border-white/20 flex items-center justify-center transition-all hover:border-indigo-400">
+                                            <svg class="w-5 h-5 text-white opacity-0 transition-opacity" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                                        </div>
+                                    </label>
+                                    <div class="flex-grow">
+                                        <p class="font-bold text-sm ${isChecked ? 'line-through opacity-40 text-slate-400' : ''}">${t.title}</p>
+                                        <p class="text-[9px] font-bold text-white/40 uppercase tracking-widest mt-0.5">${t.time} МИН • ${t.type}</p>
+                                    </div>
+                                    <button onclick="goToMethod('${t.method}')" class="w-8 h-8 rounded-full bg-white/5 hover:bg-indigo-500 flex items-center justify-center transition-colors text-white/50 hover:text-white">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                                    </button>
+                                </div>
+                                `;
+                            }).join('')}
+                        </div>
+                        <div class="absolute -bottom-10 -right-10 w-48 h-48 bg-indigo-500/20 blur-[80px] rounded-full pointer-events-none"></div>
+                    </div>
+
+                    <div class="bg-white p-7 rounded-[2rem] border border-slate-100 shadow-sm">
+                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Активный ресурс</p>
+                        <div class="flex justify-between items-center">
+                            <span class="font-bold text-slate-800">${phase.res}</span>
+                            <button onclick="window.open('${phase.url}', '_blank')" class="text-xs font-black text-indigo-600 uppercase tracking-widest border-b-2 border-indigo-100 hover:border-indigo-600 transition-all pb-1">Открыть →</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            container.innerHTML = html;
+        }
+
+        // --- VIEW: STATS ---
+        function renderStats(container) {
+            // Generate last 30 days
+            const days = [];
+            for (let i = 29; i >= 0; i--) {
+                const d = new Date();
+                d.setDate(d.getDate() - i);
+                days.push(d.toDateString());
+            }
+
+            const totalDone = Object.keys(state.history).length;
+
+            let html = `
+                <div class="space-y-6 animate-in">
+                    <h2 class="text-2xl font-black text-slate-900 italic tracking-tight uppercase">Дисциплина</h2>
+                    
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="bg-indigo-600 p-6 rounded-[2rem] text-white shadow-xl relative overflow-hidden">
+                            <p class="text-[9px] font-black uppercase opacity-60 mb-2 leading-none tracking-widest">Дней закрыто</p>
+                            <p class="text-4xl font-black tracking-tighter">${totalDone}</p>
+                            <p class="text-[8px] mt-2 opacity-50 uppercase font-black">из 365 запланированных</p>
+                        </div>
+                         <div class="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm flex flex-col justify-center">
+                            <p class="text-[9px] font-black uppercase text-slate-400 mb-2 leading-none tracking-widest">Текущий стрик</p>
+                            <p class="text-4xl font-black text-slate-800 tracking-tighter">${state.streak} <span class="text-lg text-orange-500">🔥</span></p>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm">
+                         <div class="flex justify-between items-center mb-4">
+                            <h3 class="font-black text-sm text-slate-700 uppercase tracking-wide">Трекер 30 дней</h3>
+                            <div class="flex items-center gap-2 text-[9px] font-bold uppercase text-slate-400">
+                                <span class="block w-3 h-3 bg-emerald-500 rounded"></span> Done
+                                <span class="block w-3 h-3 bg-slate-100 rounded"></span> Skip
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-7 gap-2">
+                            ${days.map(dateStr => {
+                                const isDone = state.history[dateStr];
+                                const isToday = dateStr === new Date().toDateString();
+                                const color = isDone ? 'bg-emerald-500 shadow-lg shadow-emerald-500/40' : (isToday ? 'bg-slate-200 animate-pulse' : 'bg-slate-100');
+                                const dayNum = new Date(dateStr).getDate();
+                                return `<div class="aspect-square rounded-lg ${color} flex items-center justify-center text-[10px] font-black text-white/50">${isDone ? '✓' : ''}</div>`;
+                            }).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+            container.innerHTML = html;
+        }
+
+        // --- VIEW: METHOD ---
+        function renderMethod(container) {
+            let html = `
+                <div class="space-y-6 animate-in pb-10">
+                    <h2 class="text-2xl font-black text-slate-900 italic tracking-tight">База знаний</h2>
+                    
+                    <div class="bg-indigo-600 p-8 rounded-[2.5rem] text-white shadow-xl relative overflow-hidden mb-8">
+                        <h4 class="font-black text-lg mb-4 italic leading-tight uppercase tracking-tighter">AI Teacher Prompt</h4>
+                        <p class="text-[11px] opacity-80 mb-6 italic">Скопируй это в ChatGPT для практики.</p>
+                        <button onclick="copyPrompt(this)" class="w-full bg-white text-indigo-600 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg btn-press">Копировать</button>
+                    </div>
+
+                    <div class="space-y-4">
+                        ${Object.entries(METHODOLOGY).map(([key, val]) => `
+                            <div id="method-${key}" class="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm transition-all duration-500">
+                                <p class="text-[9px] font-black text-indigo-500 uppercase tracking-widest mb-2">Метод</p>
+                                <h3 class="text-lg font-black text-slate-800 mb-2">${val.title}</h3>
+                                <p class="text-sm text-slate-600 leading-relaxed">${val.text}</p>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+            container.innerHTML = html;
+        }
+
+        // --- VIEW: MAP ---
+        function renderMap(container) {
+            let html = `
+                <div class="space-y-4 animate-in">
+                    <h2 class="text-2xl font-black text-slate-800 italic tracking-tight">Дорожная карта</h2>
+                    ${PHASES.map(p => `
+                        <div onclick="selectPhase(${p.id})" class="p-6 rounded-[2.5rem] border-2 transition-all cursor-pointer relative btn-press ${state.currentPhaseId === p.id ? 'bg-indigo-600 text-white border-indigo-500 shadow-xl' : 'bg-white border-slate-100 text-slate-400 hover:border-indigo-200'}">
+                            <div class="flex justify-between items-center mb-1">
+                                <span class="text-[10px] font-black uppercase opacity-80">${p.days} дней</span>
+                                <span class="font-black text-xl leading-none">${p.level}</span>
+                            </div>
+                            <h3 class="font-black text-lg leading-none italic">${p.name}</h3>
+                            ${state.currentPhaseId === p.id ? '<div class="absolute top-6 right-6"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg></div>' : ''}
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+            container.innerHTML = html;
+        }
+
+        // --- ACTIONS ---
+        
+        function toggleTask(taskId, totalTasks) {
+            if (state.completedTaskIds.includes(taskId)) {
+                state.completedTaskIds = state.completedTaskIds.filter(id => id !== taskId);
+            } else {
+                state.completedTaskIds.push(taskId);
+            }
+            
+            // Re-render only Home to show checkmark state
+            renderHome(document.getElementById('main-content'));
+
+            // Check Daily Completion
+            const tasksToday = document.querySelectorAll('.custom-checkbox').length; 
+            // Note: simple check based on view logic. Better to check against data, but this works for visual feedback.
+            
+            // Logic: Did we finish all tasks for THIS phase/day type?
+            const phase = PHASES.find(p => p.id === state.currentPhaseId);
+            const isDayA = new Date().getDate() % 2 !== 0;
+            const requiredTasks = isDayA ? phase.tasksA : phase.tasksB;
+            
+            const allDone = requiredTasks.every(t => state.completedTaskIds.includes(t.id));
+
+            if (allDone) {
+                const today = new Date().toDateString();
+                if (!state.history[today]) {
+                    state.history[today] = true;
+                    state.streak += 1;
+                    showToast();
+                }
+            } else {
+                // Remove from history if user unchecked something
+                const today = new Date().toDateString();
+                if (state.history[today]) {
+                    delete state.history[today];
+                    state.streak = Math.max(0, state.streak - 1);
+                }
+            }
+            saveState();
+        }
+
+        function selectPhase(id) {
+            state.currentPhaseId = id;
+            state.completedTaskIds = []; // Clear tasks when switching phases? Or keep? Let's clear for cleaner UX.
+            saveState();
+            router('home');
+        }
+
+        function goToMethod(methodKey) {
+            if(!methodKey) return;
+            router('method');
+            setTimeout(() => {
+                const el = document.getElementById(`method-${methodKey}`);
+                if(el) {
+                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    el.classList.add('highlight-flash');
+                    setTimeout(() => el.classList.remove('highlight-flash'), 1500);
+                }
+            }, 100);
+        }
+
+        function showToast() {
+            const toast = document.getElementById('toast');
+            toast.classList.remove('opacity-0', 'translate-y-[-20px]');
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-[-20px]');
+            }, 3000);
+        }
+
+        function copyPrompt(btn) {
+            const p = `Ты профессиональный DaF-преподаватель. Я учу немецкий. Проведи со мной сессию, исправляй ошибки.`;
+            navigator.clipboard.writeText(p);
+            const original = btn.innerText;
+            btn.innerText = 'СКОПИРОВАНО!';
+            btn.classList.add('bg-emerald-500', 'text-white');
+            setTimeout(() => {
+                btn.innerText = original;
+                btn.classList.remove('bg-emerald-500', 'text-white');
+            }, 2000);
+        }
+
+        // --- ONBOARDING ---
+        function checkOnboarding() {
+            if (!state.hasSeenOnboarding) {
+                setTimeout(() => {
+                    document.getElementById('onboarding-modal').classList.remove('hidden');
+                }, 500);
+            }
+        }
+
+        function closeOnboarding() {
+            document.getElementById('onboarding-modal').classList.add('hidden');
+            state.hasSeenOnboarding = true;
+            saveState();
+        }
+
+        // --- INIT ---
+        (function init() {
+            checkDateReset();
+            router('home');
+            updateHeader();
+            checkOnboarding();
+        })();
+
     </script>
 </body>
 </html>
